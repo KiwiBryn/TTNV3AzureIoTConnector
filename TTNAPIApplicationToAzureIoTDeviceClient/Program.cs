@@ -176,10 +176,11 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 					}
 				}
 
-				string uplinktopic = $"v3/{options.MqttApplicationID}/devices/+/up";
-
 				// At this point all the AzureIoT Hub deviceClients setup and ready to go so can enable MQTT receive
 				mqttClient.UseApplicationMessageReceivedHandler(new MqttApplicationMessageReceivedHandlerDelegate(e => MqttClientApplicationMessageReceived(e)));
+
+				// This may shift to individual device subscriptions
+				string uplinktopic = $"v3/{options.MqttApplicationID}/devices/+/up";
 
 				await mqttClient.SubscribeAsync(uplinktopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 			}
