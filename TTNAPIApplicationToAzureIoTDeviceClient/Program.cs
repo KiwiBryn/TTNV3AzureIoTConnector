@@ -15,7 +15,7 @@
 //
 //#define DIAGNOSTICS
 //#define DIAGNOSTICS_AZURE_IOT_HUB
-//#define DIAGNOSTICS_MQTT
+//#define DIAGNOSTICS_TTN_MQTT
 //#define DEVICE_FIELDS_MINIMUM
 //#define DEVICE_ATTRIBUTES_DISPLAY
 //#define DOWNLINK_MESSAGE_PROPERTIES_DISPLAY
@@ -209,56 +209,124 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			if (e.ApplicationMessage.Topic.EndsWith("/up"))
 			{
 				PayloadUplinkV3 payload = JsonConvert.DeserializeObject<PayloadUplinkV3>(e.ApplicationMessage.ConvertPayloadToString());
-
+				
 				Console.WriteLine();
 				Console.WriteLine();
 				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} TTN Uplink message");
-#if DIAGNOSTICS_MQTT
+#if DIAGNOSTICS_TTN_MQTT
 				Console.WriteLine($" ClientId:{e.ClientId} Topic:{e.ApplicationMessage.Topic}");
 				Console.WriteLine($" Cached: {DeviceClients.Contains(payload.EndDeviceIds.DeviceId)}");
+
+				if (payload.UplinkMessage.RXMetadata != null)
+				{
+					foreach (RxMetadata rxMetaData in payload.UplinkMessage.RXMetadata)
+					{
+						Console.WriteLine($"  GatewayId", rxMetaData.GatewayIds.GatewayId);
+						Console.WriteLine($"  ReceivedAtUTC", rxMetaData.ReceivedAtUtc);
+						Console.WriteLine($"  RSSI", rxMetaData.Rssi);
+						Console.WriteLine($"  Snr", rxMetaData.Snr);
+					}
+				}
 #endif
 				Console.WriteLine($" ApplicationID: {payload.EndDeviceIds.ApplicationIds.ApplicationId}");
 				Console.WriteLine($" DeviceID: {payload.EndDeviceIds.DeviceId}");
 				Console.WriteLine($" Port: {payload.UplinkMessage.Port} ");
 				Console.WriteLine($" Payload raw: {payload.UplinkMessage.PayloadRaw}");
 
-				if (payload.UplinkMessage.PayloadDecoded != null)
-				{
-					Console.WriteLine($" Payload decoded: {payload.UplinkMessage.PayloadRaw}");
-					EnumerateChildren(1, payload.UplinkMessage.PayloadDecoded);
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+				if (deviceClient == null)
+            {
+					Console.WriteLine($" Unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+					return;
 				}
+
+				DeviceTelemetrySend(deviceClient, payload);
 
 				Console.WriteLine();
 			}
-			else
+
+			/*
+			v3/{application id}@{tenant id}/devices/{device id}/down/queued
+			v3/{application id}@{tenant id}/devices/{device id}/down/sent
+			v3/{application id}@{tenant id}/devices/{device id}/down/ack
+			v3/{application id}@{tenant id}/devices/{device id}/down/nack
+			v3/{application id}@{tenant id}/devices/{device id}/down/failed
+			*/
+		}
+
+		static async Task DeviceTelemetrySend(DeviceClient deviceClient, PayloadUplinkV3 payload)
+		{
+			JObject telemetryEvent = new JObject();
+
+			telemetryEvent.Add("DeviceEUI", payload.EndDeviceIds.DeviceEui);
+
+			telemetryEvent.Add("DeviceID", payload.EndDeviceIds.DeviceId);
+			telemetryEvent.Add("ApplicationID", payload.EndDeviceIds.ApplicationIds.ApplicationId);
+			telemetryEvent.Add("Port", payload.UplinkMessage.Port);
+			telemetryEvent.Add("PayloadRaw", payload.UplinkMessage.PayloadRaw);
+
+			// If the payload has been unpacked in TTN backend add fields to telemetry event payload
+			if (payload.UplinkMessage.PayloadDecoded != null)
 			{
-				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} ClientId: {e.ClientId} Topic: {e.ApplicationMessage.Topic}");
+				EnumerateChildren(telemetryEvent, payload.UplinkMessage.PayloadDecoded);
+			}
+
+			// Send the message to Azure IoT Hub/Azure IoT Central
+			using (Message ioTHubmessage = new Message(Encoding.ASCII.GetBytes(JsonConvert.SerializeObject(telemetryEvent))))
+			{
+				// Ensure the displayed time is the acquired time rather than the uploaded time. 
+				//ioTHubmessage.Properties.Add("iothub-creation-time-utc", payloadObject.Metadata.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
+				ioTHubmessage.Properties.Add("ApplicationId", payload.EndDeviceIds.ApplicationIds.ApplicationId);
+				ioTHubmessage.Properties.Add("DeviceId", payload.EndDeviceIds.DeviceId);
+				ioTHubmessage.Properties.Add("port", payload.UplinkMessage.Port.ToString());
+				await deviceClient.SendEventAsync(ioTHubmessage);
 			}
 		}
 
-
-		static void EnumerateChildren(int indent, JToken token)
+		static void EnumerateChildren(JObject jobject, JToken token)
 		{
-			string prepend = string.Empty.PadLeft(indent);
-
-			if (token is JProperty)
+			if (token is JProperty property)
 			{
 				if (token.First is JValue)
 				{
-					JProperty property = (JProperty)token;
-					Console.WriteLine($"{prepend} Name:{property.Name} Value:{property.Value}");
+					// Temporary dirty hack for Azure IoT Central compatibility
+					if (token.Parent is JObject possibleGpsProperty)
+					{
+						if (possibleGpsProperty.Path.StartsWith("GPS", StringComparison.OrdinalIgnoreCase))
+						{
+							if (string.Compare(property.Name, "Latitude", true) == 0)
+							{
+								jobject.Add("lat", property.Value);
+							}
+							if (string.Compare(property.Name, "Longitude", true) == 0)
+							{
+								jobject.Add("lon", property.Value);
+							}
+							if (string.Compare(property.Name, "Altitude", true) == 0)
+							{
+								jobject.Add("alt", property.Value);
+							}
+						}
+					}
+					jobject.Add(property.Name, property.Value);
 				}
 				else
 				{
-					JProperty property = (JProperty)token;
-					Console.WriteLine($"{prepend} Name:{property.Name}");
-					indent += 1;
+					JObject parentObject = new JObject();
+					foreach (JToken token2 in token.Children())
+					{
+						EnumerateChildren(parentObject, token2);
+						jobject.Add(property.Name, parentObject);
+					}
 				}
 			}
-			foreach (JToken token2 in token.Children())
+			else
+			{
+				foreach (JToken token2 in token.Children())
 				{
-					EnumerateChildren(indent, token2);
+					EnumerateChildren(jobject, token2);
 				}
+			}
 		}
 
 		private async static Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
