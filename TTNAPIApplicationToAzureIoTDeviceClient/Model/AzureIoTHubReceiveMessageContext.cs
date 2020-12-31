@@ -18,6 +18,7 @@ namespace devMobile.TheThingsNetwork.Models
 {
    public class AzureIoTHubReceiveMessageHandlerContext
    {
+      public string TenantId { get; set; }
       public string DeviceId { get; set; }
       public string ApplicationId { get; set; }
    }
