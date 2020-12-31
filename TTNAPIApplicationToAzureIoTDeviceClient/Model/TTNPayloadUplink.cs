@@ -110,7 +110,7 @@ namespace devMobile.TheThingsNetwork.Models
       public Settings Settings { get; set; }
    }
 
-   public class PayloadUplinkV3
+   public class PayloadUplink
    {
       [JsonProperty("end_device_ids")]
       public EndDeviceIds EndDeviceIds { get; set; }
