@@ -41,11 +41,8 @@ namespace devMobile.TheThingsNetwork.Models
       Highest,
    }
 
-   public class DownlinkAck
+   public class Downlink
    {
-      [JsonProperty("session_key_id")]
-      public string SessionKeyId { get; set; }
-
       [JsonProperty("f_port")]
       public int Port { get; set; }
 
@@ -66,16 +63,10 @@ namespace devMobile.TheThingsNetwork.Models
       public List<string> CorrelationIds { get; set; }
    }
 
-   public class DownlinkPayloadV3
+   public class DownlinkPayload
    {
-      [JsonProperty("end_device_ids")]
-      public EndDeviceIds EndDeviceIds { get; set; }
-
-      [JsonProperty("correlation_ids")]
-      public List<string> CorrelationIds { get; set; }
-
-      [JsonProperty("downlink_ack")]
-      public DownlinkAck DownlinkAck { get; set; }
+      [JsonProperty("downlinks")]
+      public List<Downlink> Downlinks{ get; set; }
    }
 }
 
