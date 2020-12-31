@@ -20,10 +20,13 @@ namespace devMobile.TheThingsNetwork.Models
 
 	public class CommandLineOptions
 	{
-		[Option('u', "APIbaseURL", Required = false, HelpText = "TTN Restful API URL.")]
+		[Option('T', "", Required = true, HelpText = "TTN tenant.")]
+		public string Tenant { get; set; }
+
+		[Option('U', "APIbaseURL", Required = true, HelpText = "TTN Restful API URL.")]
 		public string ApiBaseUrl { get; set; }
 
-		[Option('K', "APIKey", Required = true, HelpText = "TTN Restful API APIkey")]
+		[Option('k', "APIKey", Required = true, HelpText = "TTN Restful API access key")]
 		public string ApiKey { get; set; }
 
 		[Option('P', "APIApplicationID", Required = true, HelpText = "TTN Restful API ApplicationID")]
@@ -35,16 +38,13 @@ namespace devMobile.TheThingsNetwork.Models
 		[Option('S', "MQTTServerName", Required = true, HelpText = "TTN MQTT API server name")]
 		public string MqttServerName { get; set; }
 
-		[Option('A', "MQTTAccessKey", Required = true, HelpText = "TTN MQTT API access key")]
+		[Option('K', "MQTTAccessKey", Required = true, HelpText = "TTN MQTT API access key")]
 		public string MqttAccessKey { get; set; }
-
-		[Option('Q', "MQTTApplicationID", Required = true, HelpText = "TTN MQTT API ApplicationID")]
-		public string MqttApplicationID { get; set; }
 
 		[Option('C', "MQTTClientName", Required = true, HelpText = "TTN MQTT API Client ID")]
 		public string MqttClientID { get; set; }
 
-		[Option('Z', "AzureIoTHubConnectionString", Required = true, HelpText = "Azure IoT Hub Connection string")]
+		[Option('A', "AzureIoTHubConnectionString", Required = true, HelpText = "Azure IoT Hub Connection string")]
 		public string AzureIoTHubconnectionString { get; set; }
 	}
 }
