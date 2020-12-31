@@ -123,8 +123,8 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 					// Retrieve list of devices page by page
 					V3EndDevices endDevices = await endDeviceRegistryClient.ListAsync(
-						options.ApiApplicationID, 
-						field_mask_paths: DevicefieldMaskPaths, 
+						options.ApiApplicationID,
+						field_mask_paths: DevicefieldMaskPaths,
 						limit: options.DevicePageSize);
 					if ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
 					{
@@ -158,19 +158,21 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 								await deviceClient.OpenAsync();
 
-								await deviceClient.SetReceiveMessageHandlerAsync(
-									AzureIoTHubClientReceiveMessageHandler,
-									new AzureIoTHubReceiveMessageHandlerContext()
-									{
-										TenantId = options.Tenant,
-										DeviceId = endDevice.Ids.Device_id,
-										ApplicationId = options.ApiApplicationID,
-									});
+								AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
+								{
+									TenantId = options.Tenant,
+									DeviceId = endDevice.Ids.Device_id,
+									ApplicationId = options.ApiApplicationID,
+								};
+
+								await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context);
+
+								await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context);
 
 								DeviceClients.Add(endDevice.Ids.Device_id, deviceClient, cacheItemPolicy);
 							}
 							catch( Exception ex)
-                     {
+							{
 								Console.WriteLine($"Azure IoT Hub OpenAsync failed {ex.Message}");
 							}
 						}
@@ -255,7 +257,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 		}
 
 		static async Task UplinkMessageReceived(MqttApplicationMessageReceivedEventArgs e)
-      {
+		{
 			try
 			{
 				PayloadUplink payload = JsonConvert.DeserializeObject<PayloadUplink>(e.ApplicationMessage.ConvertPayloadToString());
@@ -320,7 +322,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				}
 			}
 			catch( Exception ex)
-         {
+			{
 				Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
 			}
 		}
@@ -369,6 +371,11 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 					EnumerateChildren(jobject, token2);
 				}
 			}
+		}
+
+		private async static Task<MethodResponse> AzureIoTHubClientDefaultMethodHandler(MethodRequest methodRequest, object userContext)
+		{
+			return new MethodResponse(200);
 		}
 
 		private async static Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
