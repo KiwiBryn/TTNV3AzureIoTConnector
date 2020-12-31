@@ -91,6 +91,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			mqttClient = factory.CreateMqttClient();
 
 #if DIAGNOSTICS
+			Console.WriteLine($"Tennant: {options.Tennant}");
 			Console.WriteLine($"baseURL: {options.ApiBaseUrl}");
 			Console.WriteLine($"APIKey: {options.ApiKey}");
 			Console.WriteLine($"ApplicationID: {options.ApiApplicationID}");
@@ -103,7 +104,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				// First configure MQTT, open connection and wire up disconnection handler. 
 				mqttOptions = new MqttClientOptionsBuilder()
 					.WithTcpServer(options.MqttServerName)
-					.WithCredentials(options.MqttApplicationID, options.MqttAccessKey)
+					.WithCredentials($"{options.ApiApplicationID}@{options.Tenant}", options.MqttAccessKey)
 					.WithClientId(options.MqttClientID)
 					.WithTls()
 					.Build();
@@ -161,8 +162,9 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 									AzureIoTHubClientReceiveMessageHandler,
 									new AzureIoTHubReceiveMessageHandlerContext()
 									{
+										TenantId = options.Tenant,
 										DeviceId = endDevice.Ids.Device_id,
-										ApplicationId = endDevice.Ids.Application_ids.Application_id,
+										ApplicationId = options.ApiApplicationID,
 									});
 
 								DeviceClients.Add(endDevice.Ids.Device_id, deviceClient, cacheItemPolicy);
@@ -179,7 +181,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				mqttClient.UseApplicationMessageReceivedHandler(new MqttApplicationMessageReceivedHandlerDelegate(e => MqttClientApplicationMessageReceived(e)));
 
 				// This may shift to individual device subscriptions
-				string uplinkTopic = $"v3/{options.MqttApplicationID}/devices/+/up";
+				string uplinkTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/up";
 				await mqttClient.SubscribeAsync(uplinkTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
 				//string queuedTopic = $"v3/{options.MqttApplicationID}/devices/+/queued";
@@ -256,7 +258,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
       {
 			try
 			{
-				PayloadUplinkV3 payload = JsonConvert.DeserializeObject<PayloadUplinkV3>(e.ApplicationMessage.ConvertPayloadToString());
+				PayloadUplink payload = JsonConvert.DeserializeObject<PayloadUplink>(e.ApplicationMessage.ConvertPayloadToString());
 
 				string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
 				string deviceId = payload.EndDeviceIds.DeviceId;
@@ -371,43 +373,77 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 		private async static Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
       {
-			AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
-			
-			DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(receiveMessageHandlerConext.DeviceId);
-			if (deviceClient == null)
+			try
 			{
-				Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {receiveMessageHandlerConext.DeviceId}");
-				await deviceClient.RejectAsync(message);
-				return;
-			}
+				AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
 
-			using (message)
-			{
-				Console.WriteLine();
-				Console.WriteLine();
-				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
-				Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
-				Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(receiveMessageHandlerConext.DeviceId);
+				if (deviceClient == null)
+				{
+					Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {receiveMessageHandlerConext.DeviceId}");
+					await deviceClient.RejectAsync(message);
+					return;
+				}
+
+				using (message)
+				{
+					Console.WriteLine();
+					Console.WriteLine();
+					Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
+					Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
+					Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
 #if DIAGNOSTICS_AZURE_IOT_HUB
-				Console.WriteLine($" Cached: {DeviceClients.Contains(receiveMessageHandlerConext.DeviceId)}");
-				Console.WriteLine($" MessageID: {message.MessageId}");
-				Console.WriteLine($" DeliveryCount: {message.DeliveryCount}");
-				Console.WriteLine($" EnqueuedTimeUtc: {message.EnqueuedTimeUtc}");
-				Console.WriteLine($" SequenceNumber: {message.SequenceNumber}");
-				Console.WriteLine($" To: {message.To}");
+					Console.WriteLine($" Cached: {DeviceClients.Contains(receiveMessageHandlerConext.DeviceId)}");
+					Console.WriteLine($" MessageID: {message.MessageId}");
+					Console.WriteLine($" DeliveryCount: {message.DeliveryCount}");
+					Console.WriteLine($" EnqueuedTimeUtc: {message.EnqueuedTimeUtc}");
+					Console.WriteLine($" SequenceNumber: {message.SequenceNumber}");
+					Console.WriteLine($" To: {message.To}");
 #endif
-				string messageBody = Encoding.UTF8.GetString(message.GetBytes());
-				Console.WriteLine($" Body: {messageBody}");
+					string messageBody = Encoding.UTF8.GetString(message.GetBytes());
+					Console.WriteLine($" Body: {messageBody}");
 #if DOWNLINK_MESSAGE_PROPERTIES_DISPLAY
 				foreach (var property in message.Properties)
 				{
 					Console.WriteLine($"   Key:{property.Key} Value:{property.Value}");
 				}
 #endif
+					DownlinkPayload Payload = new DownlinkPayload()
+					{
+						Downlinks = new List<Downlink>()
+						{ 
+							new Downlink()
+							{
+								Confirmed = false,
+								PayloadRaw = messageBody,
+								Priority = DownlinkPriority.Normal,
+								Port = 15,
+								CorrelationIds = new List<string>()
+								{
+									message.MessageId
+								}
+							}
+						}
+					};
 
-				await deviceClient.CompleteAsync(message);
+					string downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/push";
 
-				Console.WriteLine();
+					var mqttMessage = new MqttApplicationMessageBuilder()
+											.WithTopic(downlinktopic)
+											.WithPayload(JsonConvert.SerializeObject(Payload))
+											.WithAtLeastOnceQoS()
+										.Build();
+
+					await mqttClient.PublishAsync(mqttMessage);
+
+					await deviceClient.CompleteAsync(message);
+
+					Console.WriteLine();
+				}
+			}
+			catch (Exception ex)
+			{
+				Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
 			}
 		}
 
