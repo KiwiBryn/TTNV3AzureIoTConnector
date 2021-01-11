@@ -164,7 +164,7 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
 
          //await azureIoTHubClient.AbandonAsync(message); // message retries
          await azureIoTHubClient.CompleteAsync(message);
-         //await azureIoTHubClient.RejectAsync(message); // message gone no rety
+         //await azureIoTHubClient.RejectAsync(message); // message gone no retry
       }
 
       private static async Task<MethodResponse> MethodCallbackNamedHandler(MethodRequest methodRequest, object userContext)
@@ -184,7 +184,9 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
          Console.WriteLine($"JSON:{methodRequest.DataAsJson}");
          Console.WriteLine();
 
-         return new MethodResponse(200);
+         return new MethodResponse(400);
+         //return new MethodResponse(404);
+         //return new MethodResponse(200);
       }
 
       public class GPSPosition
