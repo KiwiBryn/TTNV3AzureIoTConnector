@@ -171,7 +171,7 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
       {
          Console.WriteLine($"Named handler method was called.");
 
-         Console.WriteLine($"JSON:{methodRequest.DataAsJson}");
+         Console.WriteLine($"Payload:{methodRequest.DataAsJson}");
          Console.WriteLine();
 
          return new MethodResponse(200);
@@ -181,12 +181,16 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
       {
          Console.WriteLine($"Default handler method {methodRequest.Name} was called.");
 
-         Console.WriteLine($"JSON:{methodRequest.DataAsJson}");
+         Console.WriteLine($"Payload:{methodRequest.DataAsJson}");
          Console.WriteLine();
 
-         return new MethodResponse(400);
+         return new MethodResponse(200);
+         //return new MethodResponse(UTF8Encoding.UTF8.GetBytes(@"{""Status"":false}"), 200);
+         //return new MethodResponse(UTF8Encoding.UTF8.GetBytes(methodRequest.DataAsJson), 200);
+         //return new MethodResponse(UTF8Encoding.UTF8.GetBytes("false"), 200); // Response invalid so not unpacked
+         //return new MethodResponse(methodRequest.Data, 200);
+         //return new MethodResponse(400);
          //return new MethodResponse(404);
-         //return new MethodResponse(200);
       }
 
       public class GPSPosition
