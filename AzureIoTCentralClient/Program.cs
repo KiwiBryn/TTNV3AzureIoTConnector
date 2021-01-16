@@ -145,6 +145,7 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
          Console.WriteLine($" To:{message.To}");
          Console.WriteLine($" Module ID:{message.ConnectionModuleId}");
          Console.WriteLine($" Device ID:{message.ConnectionDeviceId}");
+         Console.WriteLine($" User ID:{message.UserId}");
          Console.WriteLine($" CreatedAt:{message.CreationTimeUtc}");
          Console.WriteLine($" EnqueuedAt:{message.EnqueuedTimeUtc}");
          Console.WriteLine($" ExpiresAt:{message.ExpiryTimeUtc}");
