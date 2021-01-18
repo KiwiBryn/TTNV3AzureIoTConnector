@@ -26,6 +26,12 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
 
    using CommandLine;
    using Newtonsoft.Json;
+   using Newtonsoft.Json.Linq;
+#if DEVICE_PROPERTIES
+   using Microsoft.Azure.Devices.Shared;
+#endif
+
+   using devMobile.TheThingsNetwork.Models;
 
    class Program
    {
@@ -57,6 +63,9 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
 
       private static async Task ApplicationCore(CommandLineOptions options)
       {
+         string tennantId = "MyTenantID";
+         string applicationId = "MyApplicationId";
+         string deviceId = "MyDeviceId";
          DeviceClient azureIoTHubClient;
          Timer MessageSender;
 
@@ -66,11 +75,30 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
             azureIoTHubClient = DeviceClient.CreateFromConnectionString(options.AzureIoTHubconnectionString, TransportType.Amqp_Tcp_Only);
 
             await azureIoTHubClient.OpenAsync();
-            await azureIoTHubClient.SetReceiveMessageHandlerAsync(ReceiveMessageHandler, azureIoTHubClient);
+            await azureIoTHubClient.SetReceiveMessageHandlerAsync(ReceiveMessageHandler, 
+               new AzureIoTHubReceiveMessageHandlerContext()
+               {
+                  AzureIoTHubClient = azureIoTHubClient,
+                  TenantId = tennantId,
+                  ApplicationId = applicationId,
+                  DeviceId = deviceId
+               });
             await azureIoTHubClient.SetMethodHandlerAsync("Named", MethodCallbackNamedHandler, null);
             await azureIoTHubClient.SetMethodDefaultHandlerAsync(MethodCallbackDefaultHandler, null);
 
-            MessageSender = new Timer(TimerCallbackAsync, azureIoTHubClient, new TimeSpan(0, 0, 10), new TimeSpan(0, 2, 0));
+#if DEVICE_PROPERTIES
+            await azureIoTHubClient.SetDesiredPropertyUpdateCallbackAsync(DesiredPropertyUpdateCallback, azureIoTHubClient);
+
+            TwinCollection reportedProperties = new TwinCollection();
+
+            reportedProperties["Analog_Output_150"] = 1.4f;
+            reportedProperties["Analog_Output_160"] = 1.5f;
+            reportedProperties["Analog_Output_170"] = new TimeSpan(0, 10, 0).TotalMinutes;
+
+            azureIoTHubClient.UpdateReportedPropertiesAsync(reportedProperties).Wait();
+#endif
+            
+            MessageSender = new Timer(TelemetryTimerCallbackAsync, azureIoTHubClient, new TimeSpan(0, 0, 10), new TimeSpan(0, 2, 0));
 
             Console.WriteLine("Press any key to exit");
             while (!Console.KeyAvailable)
@@ -86,7 +114,7 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
          }
       }
 
-      private static async void TimerCallbackAsync(object state)
+      private static async void TelemetryTimerCallbackAsync(object state)
       {
          Random random = new Random();
          DeviceClient azureIoTHubClient = (DeviceClient)state;
@@ -108,7 +136,7 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
             AnalogInput = analogInput,
             DigitalInput = digitalInput,
             GPSPosition = new GPSPosition()
-            { 
+            {
                Latitude = latitude,
                Longitude = longitude,
                Altitude = altitude,
@@ -132,6 +160,7 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
          Console.WriteLine();
       }
 
+#if AZURE_IOT_HUB
       private async static Task ReceiveMessageHandler(Message message, object userContext)
       {
          DeviceClient azureIoTHubClient = (DeviceClient)userContext;
@@ -167,6 +196,105 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
          await azureIoTHubClient.CompleteAsync(message);
          //await azureIoTHubClient.RejectAsync(message); // message gone no retry
       }
+#endif
+
+#if AZURE_IOT_CENTRAL
+      private async static Task ReceiveMessageHandler(Message message, object userContext)
+      {
+         AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
+
+         Console.WriteLine($"ReceiveMessageHandler handler method was called.");
+
+         Console.WriteLine($" Message ID:{message.MessageId}");
+         Console.WriteLine($" Message Schema:{message.MessageSchema}");
+         Console.WriteLine($" Correlation ID:{message.CorrelationId}");
+         Console.WriteLine($" Lock Token:{message.LockToken}");
+         Console.WriteLine($" Component name:{message.ComponentName}");
+         Console.WriteLine($" To:{message.To}");
+         Console.WriteLine($" Module ID:{message.ConnectionModuleId}");
+         Console.WriteLine($" Device ID:{message.ConnectionDeviceId}");
+         Console.WriteLine($" User ID:{message.UserId}");
+         Console.WriteLine($" CreatedAt:{message.CreationTimeUtc}");
+         Console.WriteLine($" EnqueuedAt:{message.EnqueuedTimeUtc}");
+         Console.WriteLine($" ExpiresAt:{message.ExpiryTimeUtc}");
+         Console.WriteLine($" Delivery count:{message.DeliveryCount}");
+         Console.WriteLine($" InputName:{message.InputName}");
+         Console.WriteLine($" SequenceNumber:{message.SequenceNumber}");
+
+         foreach (var property in message.Properties)
+         {
+            Console.WriteLine($"   Key:{property.Key} Value:{property.Value}");
+         }
+
+         Console.WriteLine($" Content encoding:{message.ContentEncoding}");
+         Console.WriteLine($" Content type:{message.ContentType}");
+         string payloadText = Encoding.UTF8.GetString(message.GetBytes());
+         Console.WriteLine($" Content:{payloadText}");
+         Console.WriteLine();
+
+         if (!message.Properties.ContainsKey("method-name"))
+         {
+            Console.WriteLine($"   Property method-name not found");
+            return;
+         }
+
+         string methodName = message.Properties["method-name"];
+         if (string.IsNullOrWhiteSpace( methodName))
+         {
+            Console.WriteLine($"   Property null or white space");
+            return;
+         }
+
+         if (string.IsNullOrWhiteSpace(payloadText))
+         {
+            Console.WriteLine($"   Payload null or white space");
+            return;
+         }
+
+         JObject payload;
+
+         if (isValidJSON(payloadText))
+         {
+            payload = JObject.Parse(payloadText);
+         }
+         else
+         {
+            payload = new JObject
+            {
+               { methodName, payloadText }
+            };
+         }
+
+         string downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/push";
+
+         DownlinkPayload downlinkPayload = new DownlinkPayload()
+         {
+            Downlinks = new List<Downlink>()
+            {
+               new Downlink()
+               {
+                  Confirmed = false,
+                  //PayloadRaw = messageBody,
+                  PayloadDecoded = payload,
+                  Priority = DownlinkPriority.Normal,
+                  Port = 10,
+                  CorrelationIds = new List<string>()
+                  {
+                     message.LockToken
+                  }
+               }
+            }
+         };
+
+         Console.WriteLine($"TTN Topic :{downlinktopic}");
+         Console.WriteLine($"TTN downlink JSON :{JsonConvert.SerializeObject(downlinkPayload, Formatting.Indented)}");
+
+         //await receiveMessageHandlerConext.AzureIoTHubClient.AbandonAsync(message); // message retries
+         //await receiveMessageHandlerConext.AzureIoTHubClient.CompleteAsync(message);
+         await receiveMessageHandlerConext.AzureIoTHubClient.CompleteAsync(message.LockToken);
+         //await receiveMessageHandlerConext.AzureIoTHubClient.RejectAsync(message); // message gone no retry
+      }
+#endif
 
       private static async Task<MethodResponse> MethodCallbackNamedHandler(MethodRequest methodRequest, object userContext)
       {
@@ -178,6 +306,7 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
          return new MethodResponse(200);
       }
 
+#if AZURE_IOT_HUB
       private static async Task<MethodResponse> MethodCallbackDefaultHandler(MethodRequest methodRequest, object userContext)
       {
          Console.WriteLine($"Default handler method {methodRequest.Name} was called.");
@@ -192,6 +321,68 @@ namespace devMobile.TheThingsNetwork.AzureIoTCentralClient
          //return new MethodResponse(methodRequest.Data, 200);
          //return new MethodResponse(400);
          //return new MethodResponse(404);
+      }
+#endif
+
+#if AZURE_IOT_CENTRAL
+      private static async Task<MethodResponse> MethodCallbackDefaultHandler(MethodRequest methodRequest, object userContext)
+      {
+         Console.WriteLine($"Default handler method {methodRequest.Name} was called.");
+
+         Console.WriteLine($"Payload:{methodRequest.DataAsJson}");
+         Console.WriteLine();
+
+         return new MethodResponse(200);
+         //return new MethodResponse(UTF8Encoding.UTF8.GetBytes(@"{""Status"":false}"), 200);
+         //return new MethodResponse(UTF8Encoding.UTF8.GetBytes(methodRequest.DataAsJson), 200);
+         //return new MethodResponse(UTF8Encoding.UTF8.GetBytes("false"), 200); // Response invalid so not unpacked
+         //return new MethodResponse(methodRequest.Data, 200);
+         //return new MethodResponse(400);
+         //return new MethodResponse(404);
+      }
+#endif
+
+#if DEVICE_PROPERTIES
+      private static async Task DesiredPropertyUpdateCallback(TwinCollection desiredProperties, object userContext)
+      {
+         try
+         {
+            DeviceClient azureIoTHubClient = (DeviceClient)userContext;
+
+            Console.WriteLine($"Properties:{desiredProperties.ToJson()}");
+
+            TwinCollection reportedProperties = new TwinCollection();
+
+            reportedProperties["Analog_Output_160"] = 22.0f;
+
+            await azureIoTHubClient.UpdateReportedPropertiesAsync(reportedProperties);
+         }
+         catch( Exception ex)
+         {
+            Console.WriteLine( ex.Message);
+         }
+      }
+#endif
+
+      private static bool isValidJSON(string json)
+      {
+         try
+         {
+            JToken token = JObject.Parse(json);
+            return true;
+         }
+         catch (Exception ex)
+         {
+            return false;
+         }
+      }
+
+      public class AzureIoTHubReceiveMessageHandlerContext
+      {
+         public DeviceClient AzureIoTHubClient { get; set; }
+         public string TenantId { get; set; }
+         public string DeviceId { get; set; }
+         public string ApplicationId { get; set; }
       }
 
       public class GPSPosition
