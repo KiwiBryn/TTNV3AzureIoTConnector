@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TTNAPIOpenAPIClient", "TTNA
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MQTTnetAzureFunction", "MQTTnetAzureFunction\MQTTnetAzureFunction.csproj", "{BA05546C-C295-4CC4-B669-E4672D79B998}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzureIoTCentralClient", "AzureIoTCentralClient\AzureIoTCentralClient.csproj", "{CFA46781-66EA-4237-B84A-D23FE36740C3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AzureIoTCentralClient", "AzureIoTCentralClient\AzureIoTCentralClient.csproj", "{CFA46781-66EA-4237-B84A-D23FE36740C3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TTNAzureIoTHubConnectorClient", "TTNAzureIoTHubConnectorClient\TTNAzureIoTHubConnectorClient.csproj", "{3E05D367-A4F0-4463-BBA3-FF5F079E7C22}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{CFA46781-66EA-4237-B84A-D23FE36740C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CFA46781-66EA-4237-B84A-D23FE36740C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CFA46781-66EA-4237-B84A-D23FE36740C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3E05D367-A4F0-4463-BBA3-FF5F079E7C22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3E05D367-A4F0-4463-BBA3-FF5F079E7C22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3E05D367-A4F0-4463-BBA3-FF5F079E7C22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3E05D367-A4F0-4463-BBA3-FF5F079E7C22}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
