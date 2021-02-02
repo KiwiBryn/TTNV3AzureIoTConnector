@@ -22,10 +22,10 @@ namespace devMobile.TheThingsNetwork.Models
    using Newtonsoft.Json.Linq;
 
    // Production version of classes for unpacking HTTP payload https://json2csharp.com/
-   // In inital version from https://thethingsstack.io/integrations/mqtt/ 
+   // In inital version from https://www.thethingsindustries.com/docs/reference/data-formats/
    public class GatewayIds
    {
-      [JsonProperty("gtw_id")]
+      [JsonProperty("gateway_id")]
       public string GatewayId { get; set; }
 
       [JsonProperty("eui")]
@@ -40,17 +40,23 @@ namespace devMobile.TheThingsNetwork.Models
       [JsonProperty("time")]
       public DateTime ReceivedAtUtc { get; set; }
 
-      [JsonProperty("time")]
+      [JsonProperty("timestamp")]
       public ulong Timestamp { get; set; }
 
       [JsonProperty("rssi")]
       public int Rssi { get; set; }
 
+      [JsonProperty("channel_rssi")]
+      public int ChannelRssi { get; set; }
+
       [JsonProperty("snr")]
-      public int Snr { get; set; }
+      public double Snr { get; set; }
 
       [JsonProperty("uplink_token")]
       public string UplinkToken { get; set; }
+
+      [JsonProperty("channel_index")]
+      public int ChannelIndex { get; set; }
    }
 
    public class Lora
@@ -89,10 +95,33 @@ namespace devMobile.TheThingsNetwork.Models
       public int DeviceChannelIndex { get; set; }
    }
 
+   public class User
+   {
+      [JsonProperty("latitude")]
+      public double Latitude { get; set; }
+
+      [JsonProperty("longitude")]
+      public double Longitude { get; set; }
+
+      [JsonProperty("altitude")]
+      public int Altitude { get; set; }
+
+      [JsonProperty("source")]
+      public string Source { get; set; }
+   }
+
+   public class Locations
+   {
+      public User user { get; set; }
+   }
+
    public class UplinkMessage
    {
       [JsonProperty("session_key_id")]
       public string SessionKeyId { get; set; }
+
+      [JsonProperty("f_cnt")]
+      public int Counter { get; set; }
 
       [JsonProperty("f_port")]
       public int Port { get; set; }
@@ -108,6 +137,14 @@ namespace devMobile.TheThingsNetwork.Models
 
       [JsonProperty("settings")]
       public Settings Settings { get; set; }
+
+      [JsonProperty("received_at")]
+      public DateTime ReceivedAtUtc { get; set; }
+
+      [JsonProperty("consumed_airtime")]
+      public string ConsumedAirtime { get; set; }
+
+      public Locations locations { get; set; }
    }
 
    public class PayloadUplink
@@ -118,7 +155,13 @@ namespace devMobile.TheThingsNetwork.Models
       [JsonProperty("correlation_ids")]
       public List<string> CorrelationIds { get; set; }
 
+      [JsonProperty("received_at")]
+      public DateTime ReceivedAtUtc { get; set; }
+
       [JsonProperty("uplink_message")]
       public UplinkMessage UplinkMessage { get; set; }
+
+      [JsonProperty("simulated")]
+      public bool Simulated { get; set; }
    }
 }

@@ -22,5 +22,11 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
    {
       public const byte PortNumberMinimum = 1;
       public const byte PortNumberMaximum = 223;
+
+#if DEVICE_FIELDS_MINIMUM
+      public static readonly string[] DevicefieldMaskPaths = { "attributes" };
+#else
+		public static readonly string[] DevicefieldMaskPaths = { "name", "description", "attributes" };
+#endif
    }
 }

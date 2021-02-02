@@ -21,10 +21,12 @@ namespace devMobile.TheThingsNetwork.Models
 
    using Newtonsoft.Json;
    using Newtonsoft.Json.Converters;
+   using Newtonsoft.Json.Linq;
 
+   // Production version of classes for unpacking HTTP payload https://json2csharp.com/
+   // In inital version from https://www.thethingsindustries.com/docs/reference/data-formats/
    public enum DownlinkPriority
    {
-      Undefined = 0,
       [EnumMember(Value = "LOWEST")]
       Lowest,
       [EnumMember(Value = "LOW")]
@@ -46,11 +48,11 @@ namespace devMobile.TheThingsNetwork.Models
       [JsonProperty("f_port")]
       public int Port { get; set; }
 
-      [JsonProperty("f_cnt")]
-      public int FrameCount { get; set; }
-
       [JsonProperty("frm_payload")]
       public string PayloadRaw { get; set; }
+
+      [JsonProperty("decoded_payload")]
+      public JToken PayloadDecoded { get; set; }
 
       [JsonProperty("confirmed")]
       public bool Confirmed { get; set; }
@@ -65,6 +67,9 @@ namespace devMobile.TheThingsNetwork.Models
 
    public class DownlinkPayload
    {
+      [JsonProperty("end_device_ids")]
+      public EndDeviceIds EndDeviceIds { get; set; }
+
       [JsonProperty("downlinks")]
       public List<Downlink> Downlinks{ get; set; }
    }

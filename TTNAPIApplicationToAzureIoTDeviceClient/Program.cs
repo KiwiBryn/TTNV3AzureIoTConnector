@@ -25,6 +25,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 	using System;
 	using System.Collections.Generic;
 	using System.Diagnostics;
+	using System.Globalization;
 	using System.Net.Http;
 	using System.Runtime.Caching;
 	using System.Text;
@@ -46,17 +47,11 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 	using devMobile.TheThingsNetwork.API;
 	using devMobile.TheThingsNetwork.Models;
 
-	public static class Program
+   public static class Program
 	{
 		private static IMqttClient mqttClient = null;
 		private static IMqttClientOptions mqttOptions = null;
 		private static readonly ObjectCache DeviceClients = MemoryCache.Default;
-
-#if DEVICE_FIELDS_MINIMUM
-		private static readonly string[] DevicefieldMaskPaths = { "attributes" };
-#else
-		private static readonly string[] DevicefieldMaskPaths = { "name", "description", "attributes" };
-#endif
 
 		public static async Task Main(string[] args)
 		{
@@ -124,7 +119,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 					// Retrieve list of devices page by page
 					V3EndDevices endDevices = await endDeviceRegistryClient.ListAsync(
 						options.ApiApplicationID,
-						field_mask_paths: DevicefieldMaskPaths,
+						field_mask_paths: Constants.DevicefieldMaskPaths,
 						limit: options.DevicePageSize);
 					if ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
 					{
@@ -158,6 +153,8 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 								await deviceClient.OpenAsync();
 
+								DeviceClients.Add(endDevice.Ids.Device_id, deviceClient, cacheItemPolicy);
+
 								AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
 								{
 									TenantId = options.Tenant,
@@ -168,8 +165,6 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 								await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context);
 
 								await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context);
-
-								DeviceClients.Add(endDevice.Ids.Device_id, deviceClient, cacheItemPolicy);
 							}
 							catch( Exception ex)
 							{
@@ -216,7 +211,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			}
 
 			// Consider ways to mop up connections
-
+			
 			Console.WriteLine("Press any key to exit");
 			Console.ReadLine();
 		}
@@ -226,37 +221,57 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			if (e.ApplicationMessage.Topic.EndsWith("/up", StringComparison.InvariantCultureIgnoreCase))
 			{
 				await UplinkMessageReceived(e);
+				return;
 			}
 
+			// Something other than an uplink message
 			if (e.ApplicationMessage.Topic.EndsWith("/queued", StringComparison.InvariantCultureIgnoreCase))
 			{
 				Console.WriteLine($"queued: {e.ApplicationMessage.Topic}");
+				Console.WriteLine($" Payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
 				//await DownlinkMessageQueued(e);
+				return;
 			}
 
 			if (e.ApplicationMessage.Topic.EndsWith("/sent", StringComparison.InvariantCultureIgnoreCase))
 			{
 				Console.WriteLine($"sent: {e.ApplicationMessage.Topic}");
+				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
 				//await DownlinkMessageReceived(e);
+				return;
 			}
 
 			if (e.ApplicationMessage.Topic.EndsWith("/ack", StringComparison.InvariantCultureIgnoreCase))
 			{
 				Console.WriteLine($"ack: {e.ApplicationMessage.Topic}");
+				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
 				//await DownlinkMessageAck(e);
+				return;
 			}
 
 			if (e.ApplicationMessage.Topic.EndsWith("/nack", StringComparison.InvariantCultureIgnoreCase))
 			{
 				Console.WriteLine($"nack: {e.ApplicationMessage.Topic}");
+				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
 				//await DownlinkMessageNack(e);
+				return;
 			}
-			
+
 			if (e.ApplicationMessage.Topic.EndsWith("/failed", StringComparison.InvariantCultureIgnoreCase))
 			{
 				Console.WriteLine($"failed {e.ApplicationMessage.Topic}");
+				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
 				//await DownlinkMessageFailed(e);
+				return;
 			}
+
+			Console.WriteLine($"Unknown {e.ApplicationMessage.Topic}");
+			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 		}
 
 		static async Task UplinkMessageReceived(MqttApplicationMessageReceivedEventArgs e)
@@ -316,8 +331,8 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				using (Message ioTHubmessage = new Message(Encoding.ASCII.GetBytes(JsonConvert.SerializeObject(telemetryEvent))))
 				{
 					// Ensure the displayed time is the acquired time rather than the uploaded time. 
-					//ioTHubmessage.Properties.Add("iothub-creation-time-utc", payloadObject.Metadata.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
-					ioTHubmessage.Properties.Add("ApplicationId", applicationId);
+					ioTHubmessage.Properties.Add("iothub-creation-time-utc", payload.UplinkMessage.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
+  				   ioTHubmessage.Properties.Add("ApplicationId", applicationId);
 					ioTHubmessage.Properties.Add("DeviceId", deviceId);
 					ioTHubmessage.Properties.Add("port", port.ToString());
 
@@ -397,7 +412,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				if (deviceClient == null)
 				{
 					Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {receiveMessageHandlerConext.DeviceId}");
-					await deviceClient.RejectAsync(message);
+					//await deviceClient.RejectAsync(message);
 					return;
 				}
 
@@ -408,6 +423,8 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 					Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
 					Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
 					Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
+					Console.WriteLine($" LockToken: {message.LockToken}");
+
 #if DIAGNOSTICS_AZURE_IOT_HUB
 					Console.WriteLine($" Cached: {DeviceClients.Contains(receiveMessageHandlerConext.DeviceId)}");
 					Console.WriteLine($" MessageID: {message.MessageId}");
@@ -445,22 +462,17 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 						return;
 					}
 
-					if (!Enum.TryParse(message.Properties["Priority"], true, out priority))
+					string priorityPoperty = message.Properties["Priority"];
+
+					if (!Enum.TryParse(priorityPoperty, true, out priority) || !Enum.IsDefined(typeof(DownlinkPriority), priority))
 					{
 						Console.WriteLine(" UplinkMessageReceived priority property invalid");
 						await deviceClient.RejectAsync(message);
 						return;
 					}
 
-					if (priority == DownlinkPriority.Undefined)
-					{
-						Console.WriteLine(" UplinkMessageReceived priority property undefined value invalid");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
-
 					if (!message.Properties.ContainsKey("Port"))
-               {
+					{
 						Console.WriteLine(" UplinkMessageReceived missing port number property");
 						await deviceClient.RejectAsync(message);
 						return;
@@ -475,7 +487,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 					if ((port < Constants.PortNumberMinimum) || port > (Constants.PortNumberMaximum))
 					{
-						Console.WriteLine($" UplinkMessageReceived port number property invalid value must be between {Constants.PortNumberMinimum} and {Constants.PortNumberMaximum}");
+						Console.WriteLine($" UplinkMessageReceived port number {port} is invalid value must be between {Constants.PortNumberMinimum} and {Constants.PortNumberMaximum}");
 						await deviceClient.RejectAsync(message);
 						return;
 					}
@@ -487,8 +499,9 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 						return;
 					}
 
-					switch(message.Properties["Queue"].ToLower())
-               {
+					string queueProperty = message.Properties["Queue"].ToLower();
+					switch (queueProperty)
+					{
 						case "push":
 							downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/push";
 							break;
@@ -496,15 +509,15 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 							downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/replace";
 							break;
 						default:
-							Console.WriteLine(" UplinkMessageReceived missing queue property invalid value");
+							Console.WriteLine(" UplinkMessageReceived missing queue {queueProperty} property invalid value");
 							await deviceClient.RejectAsync(message);
 							return;
-               }
+					}
 
 					DownlinkPayload Payload = new DownlinkPayload()
 					{
 						Downlinks = new List<Downlink>()
-						{ 
+						{
 							new Downlink()
 							{
 								Confirmed = confirmed,
@@ -513,7 +526,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 								Port = port,
 								CorrelationIds = new List<string>()
 								{
-									message.MessageId
+									$"az:LockToken:{message.LockToken}"
 								}
 							}
 						}
@@ -523,7 +536,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 											.WithTopic(downlinktopic)
 											.WithPayload(JsonConvert.SerializeObject(Payload))
 											.WithAtLeastOnceQoS()
-										.Build();
+											.Build();
 
 					await mqttClient.PublishAsync(mqttMessage);
 
