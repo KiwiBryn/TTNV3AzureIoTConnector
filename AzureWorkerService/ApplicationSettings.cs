@@ -1,5 +1,5 @@
 ﻿//---------------------------------------------------------------------------------
-// Copyright (c) December 2020, devMobile Software
+// Copyright (c) January 2021, devMobile Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,11 @@
 // limitations under the License.
 //
 //---------------------------------------------------------------------------------
-namespace devMobile.TheThingsNetwork.TTNAzureIoTHubConnectorClient
+namespace devMobile.TheThingsNetwork.WorkerService
 {
-   using System;
-
-   class Program
+   public class ApplicationSettings
    {
-      static void Main(string[] args)
-      {
-         Console.WriteLine("Hello World!");
-      }
+      public string SecretKey1 { get; set; }
+      public string SecretKey2 { get; set; }
    }
 }

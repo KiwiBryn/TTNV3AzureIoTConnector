@@ -340,3 +340,7 @@ ASALocalRun/
 healthchecksdb
 /TTNAPIApplicationToAzureIoTDeviceClient/Properties/launchSettings.json
 /AzureIoTCentralClient/Properties/launchSettings.json
+/TTNAzureIoTHubConnectorClient/Properties/launchSettings.json
+/AzureWorkerService/Properties/launchSettings.json
+/AzureWorkerService/appsettings.Development.json
+/AzureWorkerService/appsettings.Production.json
