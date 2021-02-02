@@ -210,14 +210,26 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				await Task.Delay(1000);
 			}
 
-			// Consider ways to mop up connections
-			
+			// Mop up Azure IoT connections and MQTT COnnection for applications
+			foreach (KeyValuePair<string, object> device in DeviceClients)
+			{
+				DeviceClient deviceClient = (DeviceClient)device.Value;
+
+				await deviceClient.CloseAsync();
+
+				deviceClient.Dispose();
+			}
+
+			await mqttClient.DisconnectAsync();
+
 			Console.WriteLine("Press any key to exit");
 			Console.ReadLine();
 		}
 
 		private static async void MqttClientApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs e)
 		{
+			Console.WriteLine();
+
 			if (e.ApplicationMessage.Topic.EndsWith("/up", StringComparison.InvariantCultureIgnoreCase))
 			{
 				await UplinkMessageReceived(e);
@@ -283,9 +295,6 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
 				string deviceId = payload.EndDeviceIds.DeviceId;
 				int port = payload.UplinkMessage.Port;
-
-				Console.WriteLine();
-				Console.WriteLine();
 				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} TTN Uplink message");
 #if DIAGNOSTICS_TTN_MQTT
 				Console.WriteLine($" ClientId:{e.ClientId} Topic:{e.ApplicationMessage.Topic}");
@@ -404,6 +413,8 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			DownlinkPriority priority;
 			string downlinktopic;
 
+			Console.WriteLine();
+
 			try
 			{
 				AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
@@ -418,9 +429,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 				using (message)
 				{
-					Console.WriteLine();
-					Console.WriteLine();
-					Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
+	  				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
 					Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
 					Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
 					Console.WriteLine($" LockToken: {message.LockToken}");
