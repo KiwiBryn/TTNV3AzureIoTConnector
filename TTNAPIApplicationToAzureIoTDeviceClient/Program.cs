@@ -26,6 +26,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 	using System.Collections.Generic;
 	using System.Diagnostics;
 	using System.Globalization;
+	using System.Linq;
 	using System.Net.Http;
 	using System.Runtime.Caching;
 	using System.Text;
@@ -239,46 +240,31 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			// Something other than an uplink message
 			if (e.ApplicationMessage.Topic.EndsWith("/queued", StringComparison.InvariantCultureIgnoreCase))
 			{
-				Console.WriteLine($"queued: {e.ApplicationMessage.Topic}");
-				Console.WriteLine($" Payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-				//await DownlinkMessageQueued(e);
+				await DownlinkMessageQueued(e);
 				return;
 			}
 
 			if (e.ApplicationMessage.Topic.EndsWith("/sent", StringComparison.InvariantCultureIgnoreCase))
 			{
-				Console.WriteLine($"sent: {e.ApplicationMessage.Topic}");
-				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-				//await DownlinkMessageReceived(e);
+				await DownlinkMessageSent(e);
 				return;
 			}
 
 			if (e.ApplicationMessage.Topic.EndsWith("/ack", StringComparison.InvariantCultureIgnoreCase))
 			{
-				Console.WriteLine($"ack: {e.ApplicationMessage.Topic}");
-				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-				//await DownlinkMessageAck(e);
+				await DownlinkMessageAck(e);
 				return;
 			}
 
 			if (e.ApplicationMessage.Topic.EndsWith("/nack", StringComparison.InvariantCultureIgnoreCase))
 			{
-				Console.WriteLine($"nack: {e.ApplicationMessage.Topic}");
-				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-				//await DownlinkMessageNack(e);
+				await DownlinkMessageNack(e);
 				return;
 			}
 
 			if (e.ApplicationMessage.Topic.EndsWith("/failed", StringComparison.InvariantCultureIgnoreCase))
 			{
-				Console.WriteLine($"failed {e.ApplicationMessage.Topic}");
-				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-				//await DownlinkMessageFailed(e);
+				await DownlinkMessageFailed(e);
 				return;
 			}
 
@@ -341,7 +327,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				{
 					// Ensure the displayed time is the acquired time rather than the uploaded time. 
 					ioTHubmessage.Properties.Add("iothub-creation-time-utc", payload.UplinkMessage.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
-  				   ioTHubmessage.Properties.Add("ApplicationId", applicationId);
+					ioTHubmessage.Properties.Add("ApplicationId", applicationId);
 					ioTHubmessage.Properties.Add("DeviceId", deviceId);
 					ioTHubmessage.Properties.Add("port", port.ToString());
 
@@ -351,6 +337,141 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			catch( Exception ex)
 			{
 				Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
+			}
+		}
+
+		static async Task DownlinkMessageQueued(MqttApplicationMessageReceivedEventArgs e)
+      {
+			DownlinkQueuedPayload payload = JsonConvert.DeserializeObject<DownlinkQueuedPayload>(e.ApplicationMessage.ConvertPayloadToString());
+
+			Console.WriteLine();
+			Console.WriteLine($"Queued: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+			if ( payload == null)
+         {
+				Console.WriteLine($"Queued: {e.ApplicationMessage.Topic} payload invalid");
+				return;
+         }
+
+			if (!payload.DownlinkQueued.Confirmed)
+			{
+				bool result = payload.CorrelationIds.Any(o => o.StartsWith("az:LockToken:"));
+
+				if (result)
+				{
+					Console.WriteLine("Found az:LockToken: ");
+					string lockToken = payload.CorrelationIds.Single(o => o.StartsWith("az:LockToken:"));
+					lockToken = lockToken.Remove(0, "az:LockToken:".Length);
+
+					DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+					if (deviceClient == null)
+					{
+						Console.WriteLine($" DownlinkMessageQueued unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+						return;
+					}
+
+					try
+					{
+						await deviceClient.CompleteAsync(lockToken);
+					}
+					catch( Exception ex)
+               {
+						Console.WriteLine(ex.Message);
+               }
+				}
+			}
+		}
+
+		static async Task DownlinkMessageSent(MqttApplicationMessageReceivedEventArgs e)
+		{
+
+		}
+
+		static async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
+      {
+			DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
+
+			Console.WriteLine();
+			Console.WriteLine($"Ack: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+			if (payload == null)
+			{
+				Console.WriteLine($"Ack: {e.ApplicationMessage.Topic} payload invalid");
+				return;
+			}
+
+			bool result = payload.correlation_ids.Any(o => o.StartsWith("az:LockToken:"));
+
+			if (result)
+			{
+				Console.WriteLine("Found az:LockToken: ");
+				string lockToken = payload.correlation_ids.Single(o => o.StartsWith("az:LockToken:"));
+				lockToken = lockToken.Remove(0, "az:LockToken:".Length);
+
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.end_device_ids.DeviceId);
+				if (deviceClient == null)
+				{
+					Console.WriteLine($" DownlinkMessageQueued unknown DeviceID: {payload.end_device_ids.DeviceId}");
+					return;
+				}
+
+				try
+				{
+					await deviceClient.CompleteAsync(lockToken);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine(ex.Message);
+				}
+			}
+		}
+
+		static async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
+		{
+			Console.WriteLine($"nack: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+		}
+
+		static async Task DownlinkMessageFailed(MqttApplicationMessageReceivedEventArgs e)
+		{
+			DownlinkFailedPayload payload = JsonConvert.DeserializeObject<DownlinkFailedPayload>(e.ApplicationMessage.ConvertPayloadToString());
+
+			Console.WriteLine();
+			Console.WriteLine($"Failed: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+			if (payload == null)
+			{
+				Console.WriteLine($"Ack: {e.ApplicationMessage.Topic} payload invalid");
+				return;
+			}
+
+			bool result = payload.correlation_ids.Any(o => o.StartsWith("az:LockToken:"));
+
+			if (result)
+			{
+				Console.WriteLine("Found az:LockToken: ");
+				string lockToken = payload.correlation_ids.Single(o => o.StartsWith("az:LockToken:"));
+				lockToken = lockToken.Remove(0, "az:LockToken:".Length);
+
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.end_device_ids.DeviceId);
+				if (deviceClient == null)
+				{
+					Console.WriteLine($" DownlinkMessageQueued unknown DeviceID: {payload.end_device_ids.DeviceId}");
+					return;
+				}
+
+				try
+				{
+					await deviceClient.RejectAsync(lockToken);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine(ex.Message);
+				}
 			}
 		}
 
@@ -548,9 +669,6 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 											.Build();
 
 					await mqttClient.PublishAsync(mqttMessage);
-
-					// Need to look at confirmation requirement ack, nack maybe failed & sent
-					await deviceClient.CompleteAsync(message);
 
 					Console.WriteLine();
 				}
