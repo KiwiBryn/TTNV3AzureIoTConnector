@@ -1,5 +1,5 @@
 ﻿//---------------------------------------------------------------------------------
-// Copyright (c) November 2020, devMobile Software
+// Copyright (c) February 2021, devMobile Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,9 @@
 // limitations under the License.
 //
 //---------------------------------------------------------------------------------
-namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient.Model
+namespace devMobile.TheThingsNetwork.Models.DownlinkFailedRaw
 {
-
    using System.Collections.Generic;
-   using System.Runtime.Serialization;
-
-   using Newtonsoft.Json;
-   using Newtonsoft.Json.Converters;
-   using Newtonsoft.Json.Linq;
 
    // Root myDeserializedClass = JsonConvert.DeserializeObject<Root>(myJsonResponse); 
    public class ApplicationIds
@@ -40,13 +34,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient.Mod
    {
       public int f_port { get; set; }
       public string frm_payload { get; set; }
-      public bool confirmed { get; set; }
-
-      [JsonProperty("decoded_payload")]
-      public JToken PayloadDecoded { get; set; }
-
       public string priority { get; set; }
-
       public List<string> correlation_ids { get; set; }
    }
 
@@ -55,7 +43,6 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient.Mod
       public string @namespace { get; set; }
       public string name { get; set; }
       public string message_format { get; set; }
-      public string correlation_id { get; set; }
       public int code { get; set; }
    }
 
@@ -65,7 +52,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient.Mod
       public Error error { get; set; }
    }
 
-   public class DonlinkFailedPayload
+   public class Root
    {
       public EndDeviceIds end_device_ids { get; set; }
       public List<string> correlation_ids { get; set; }
