@@ -16,6 +16,8 @@
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsNetwork.Models
 {
+   using System.Runtime.Serialization;
+
    using Newtonsoft.Json;
 
    public class ApplicationIds
@@ -40,5 +42,23 @@ namespace devMobile.TheThingsNetwork.Models
 
       [JsonProperty("dev_addr")]
       public string DeviceAddress { get; set; }
+   }
+
+   public enum DownlinkPriority
+   {
+      [EnumMember(Value = "LOWEST")]
+      Lowest,
+      [EnumMember(Value = "LOW")]
+      Low,
+      [EnumMember(Value = "BELOW_NORMAL")]
+      BelowNormal,
+      [EnumMember(Value = "NORMAL")]
+      Normal,
+      [EnumMember(Value = "ABOVE_NORMAL")]
+      AboveNormal,
+      [EnumMember(Value = "HIGH")]
+      High,
+      [EnumMember(Value = "HIGHEST")]
+      Highest,
    }
 }
