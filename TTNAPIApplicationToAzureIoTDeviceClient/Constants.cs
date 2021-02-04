@@ -28,5 +28,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 #else
 		public static readonly string[] DevicefieldMaskPaths = { "name", "description", "attributes" };
 #endif
+
+      public static string AzureCorrelationPrefix = "az:LockToken:";
    }
 }
