@@ -17,16 +17,23 @@
 namespace devMobile.TheThingsNetwork.Models
 {
    using System.Collections.Generic;
-   using System.Runtime.Serialization;
 
    using Newtonsoft.Json;
-   using Newtonsoft.Json.Linq;
+   using Newtonsoft.Json.Converters;
 
    public class DownlinkMessage
    {
+      [JsonProperty("f_port")]
       public int f_port { get; set; }
+
+      [JsonProperty("f_port")]
       public string frm_payload { get; set; }
+
+      [JsonProperty("priority")]
+      [JsonConverter(typeof(StringEnumConverter))]
       public string priority { get; set; }
+
+      [JsonProperty("correlation_ids")]
       public List<string> correlation_ids { get; set; }
    }
 
@@ -34,22 +41,35 @@ namespace devMobile.TheThingsNetwork.Models
    {
       [JsonProperty("namespace")]
       public string Namespace { get; set; }
-      public string name { get; set; }
-      public string message_format { get; set; }
-      public int code { get; set; }
+
+      [JsonProperty("name")]
+      public string Name { get; set; }
+
+      [JsonProperty("message_format")]
+      public string MessageFormat { get; set; }
+
+      [JsonProperty("code")]
+      public int Code { get; set; }
    }
 
    public class DownlinkFailed
    {
-      public DownlinkMessage downlink { get; set; }
+      [JsonProperty("downlink")]
+      public DownlinkMessage Downlink { get; set; }
+
       [JsonProperty("error")]
-      public DownlinkFailedError error { get; set; }
+      public DownlinkFailedError Error { get; set; }
    }
 
    public class DownlinkFailedPayload
    {
-      public EndDeviceIds end_device_ids { get; set; }
-      public List<string> correlation_ids { get; set; }
-      public DownlinkFailed downlink_failed { get; set; }
+      [JsonProperty("end_device_ids")]
+      public EndDeviceIds EndDeviceIds { get; set; }
+
+      [JsonProperty("correlation_ids")]
+      public List<string> CorrelationIds { get; set; }
+
+      [JsonProperty("downlink_failed")]
+      public DownlinkFailed DownlinkFailed { get; set; }
    }
 }
