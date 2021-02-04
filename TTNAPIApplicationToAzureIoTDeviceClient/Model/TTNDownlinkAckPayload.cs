@@ -16,29 +16,53 @@
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsNetwork.Models
 {
+   using System;
    using System.Collections.Generic;
 
    using Newtonsoft.Json;
+   using Newtonsoft.Json.Converters;
    using Newtonsoft.Json.Linq;
 
    public class DownlinkAck
    {
-      public string session_key_id { get; set; }
-      public int f_port { get; set; }
-      public int f_cnt { get; set; }
-      public string frm_payload { get; set; }
+      [JsonProperty("session_key_id")]
+      public string SessionKeyId { get; set; }
+
+      [JsonProperty("f_port")]
+      public int Port { get; set; }
+
+      [JsonProperty("f_cnt")]
+      public int Count { get; set; }
+
+      [JsonProperty("frm_payload")]
+      public string PayloadRaw { get; set; }
+
       [JsonProperty("decoded_payload")]
       public JToken PayloadDecoded { get; set; }
-      public bool confirmed { get; set; }
-      public string priority { get; set; }
-      public List<string> correlation_ids { get; set; }
+
+      [JsonProperty("confirmed")]
+      public bool Confirmed { get; set; }
+
+      [JsonProperty("priority")]
+      [JsonConverter(typeof(StringEnumConverter))]
+      public DownlinkPriority Priority { get; set; }
+
+      [JsonProperty("correlation_ids")]
+      public List<string> CorrelationIds { get; set; }
    }
 
    public class DownlinkAckPayload
    {
-      public EndDeviceIds end_device_ids { get; set; }
-      public List<string> correlation_ids { get; set; }
-      public string received_at { get; set; }
-      public DownlinkAck downlink_ack { get; set; }
+      [JsonProperty("end_device_ids")]
+      public EndDeviceIds EndDeviceIds { get; set; }
+
+      [JsonProperty("correlation_ids")]
+      public List<string> CorrelationIds { get; set; }
+
+      [JsonProperty("received_at")]
+      public DateTime ReceivedAtUtc { get; set; }
+
+      [JsonProperty("downlink_ack")]
+      public DownlinkAck DownlinkAck { get; set; }
    }
 }
