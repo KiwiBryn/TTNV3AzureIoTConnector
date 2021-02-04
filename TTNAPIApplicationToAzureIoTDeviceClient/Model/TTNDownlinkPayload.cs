@@ -17,7 +17,6 @@
 namespace devMobile.TheThingsNetwork.Models
 {
    using System.Collections.Generic;
-   using System.Runtime.Serialization;
 
    using Newtonsoft.Json;
    using Newtonsoft.Json.Converters;
@@ -25,24 +24,6 @@ namespace devMobile.TheThingsNetwork.Models
 
    // Production version of classes for unpacking HTTP payload https://json2csharp.com/
    // In inital version from https://www.thethingsindustries.com/docs/reference/data-formats/
-   public enum DownlinkPriority
-   {
-      [EnumMember(Value = "LOWEST")]
-      Lowest,
-      [EnumMember(Value = "LOW")]
-      Low,
-      [EnumMember(Value = "BELOW_NORMAL")]
-      BelowNormal,
-      [EnumMember(Value = "NORMAL")]
-      Normal,
-      [EnumMember(Value = "ABOVE_NORMAL")]
-      AboveNormal,
-      [EnumMember(Value = "HIGH")]
-      High,
-      [EnumMember(Value = "HIGHEST")]
-      Highest,
-   }
-
    public class Downlink
    {
       [JsonProperty("f_port")]
