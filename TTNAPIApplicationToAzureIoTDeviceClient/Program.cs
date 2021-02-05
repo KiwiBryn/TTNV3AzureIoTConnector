@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+//	AQIDBA== Base64 encoded payload: [0x01, 0x02, 0x03, 0x04]
+//
 //#define DIAGNOSTICS
 //#define DIAGNOSTICS_AZURE_IOT_HUB
 //#define DIAGNOSTICS_TTN_MQTT
@@ -342,27 +344,26 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 		static async Task DownlinkMessageQueued(MqttApplicationMessageReceivedEventArgs e)
       {
-			DownlinkQueuedPayload payload = JsonConvert.DeserializeObject<DownlinkQueuedPayload>(e.ApplicationMessage.ConvertPayloadToString());
-
 			Console.WriteLine();
-			Console.WriteLine($"Queued: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Queued: {e.ApplicationMessage.Topic}");
 			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 
+			DownlinkQueuedPayload payload = JsonConvert.DeserializeObject<DownlinkQueuedPayload>(e.ApplicationMessage.ConvertPayloadToString());
 			if ( payload == null)
          {
-				Console.WriteLine($"Queued: {e.ApplicationMessage.Topic} payload invalid");
+				Console.WriteLine($" Queued: {e.ApplicationMessage.Topic} payload invalid");
 				return;
          }
 
 			if (!payload.DownlinkQueued.Confirmed)
 			{
-				bool result = payload.CorrelationIds.Any(o => o.StartsWith("az:LockToken:"));
+				bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
 
 				if (result)
 				{
-					Console.WriteLine("Found az:LockToken: ");
-					string lockToken = payload.CorrelationIds.Single(o => o.StartsWith("az:LockToken:"));
-					lockToken = lockToken.Remove(0, "az:LockToken:".Length);
+					Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
+					string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+					lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
 
 					DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
 					if (deviceClient == null)
@@ -385,35 +386,70 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 		static async Task DownlinkMessageSent(MqttApplicationMessageReceivedEventArgs e)
 		{
+			Console.WriteLine();
+			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Sent: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 
+			DownlinkSentPayload payload = JsonConvert.DeserializeObject<DownlinkSentPayload>(e.ApplicationMessage.ConvertPayloadToString());
+			if (payload == null)
+			{
+				Console.WriteLine($" Sent: {e.ApplicationMessage.Topic} payload invalid");
+				return;
+			}
+
+			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+
+			if (result)
+			{
+				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
+				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
+
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+				if (deviceClient == null)
+				{
+					Console.WriteLine($" DownlinkMessageSent unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+					return;
+				}
+
+				/* Not certain what todo here might be like sent it confirmed vs. unconfirmed
+				try
+				{
+					await deviceClient.CompleteAsync(lockToken);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine(ex.Message);
+				}
+				*/
+			}
 		}
 
 		static async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
       {
-			DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
-
 			Console.WriteLine();
-			Console.WriteLine($"Ack: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Ack: {e.ApplicationMessage.Topic}");
 			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 
+			DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
 			if (payload == null)
 			{
-				Console.WriteLine($"Ack: {e.ApplicationMessage.Topic} payload invalid");
+				Console.WriteLine($" Ack: {e.ApplicationMessage.Topic} payload invalid");
 				return;
 			}
 
-			bool result = payload.correlation_ids.Any(o => o.StartsWith("az:LockToken:"));
+			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
 
 			if (result)
 			{
-				Console.WriteLine("Found az:LockToken: ");
-				string lockToken = payload.correlation_ids.Single(o => o.StartsWith("az:LockToken:"));
-				lockToken = lockToken.Remove(0, "az:LockToken:".Length);
+				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
+				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
 
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.end_device_ids.DeviceId);
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
 				if (deviceClient == null)
 				{
-					Console.WriteLine($" DownlinkMessageQueued unknown DeviceID: {payload.end_device_ids.DeviceId}");
+					Console.WriteLine($" DownlinkMessageAck unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
 					return;
 				}
 
@@ -430,37 +466,70 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 		static async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
 		{
-			Console.WriteLine($"nack: {e.ApplicationMessage.Topic}");
+			Console.WriteLine();
+			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Nack: {e.ApplicationMessage.Topic}");
 			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 
+			DownlinkNackPayload payload = JsonConvert.DeserializeObject<DownlinkNackPayload>(e.ApplicationMessage.ConvertPayloadToString());
+			if (payload == null)
+			{
+				Console.WriteLine($" Nack: {e.ApplicationMessage.Topic} payload invalid");
+				return;
+			}
+
+
+			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+
+			if (result)
+			{
+				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
+				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
+
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+				if (deviceClient == null)
+				{
+					Console.WriteLine($" DownlinkMessageNack unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+					return;
+				}
+
+				try
+				{
+					await deviceClient.AbandonAsync(lockToken);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine(ex.Message);
+				}
+			}
 		}
 
 		static async Task DownlinkMessageFailed(MqttApplicationMessageReceivedEventArgs e)
 		{
-			DownlinkFailedPayload payload = JsonConvert.DeserializeObject<DownlinkFailedPayload>(e.ApplicationMessage.ConvertPayloadToString());
-
 			Console.WriteLine();
-			Console.WriteLine($"Failed: {e.ApplicationMessage.Topic}");
+			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Failed: {e.ApplicationMessage.Topic}");
 			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 
+			DownlinkFailedPayload payload = JsonConvert.DeserializeObject<DownlinkFailedPayload>(e.ApplicationMessage.ConvertPayloadToString());
 			if (payload == null)
 			{
-				Console.WriteLine($"Ack: {e.ApplicationMessage.Topic} payload invalid");
+				Console.WriteLine($" Failed: {e.ApplicationMessage.Topic} payload invalid");
 				return;
 			}
 
-			bool result = payload.correlation_ids.Any(o => o.StartsWith("az:LockToken:"));
+
+			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
 
 			if (result)
 			{
-				Console.WriteLine("Found az:LockToken: ");
-				string lockToken = payload.correlation_ids.Single(o => o.StartsWith("az:LockToken:"));
-				lockToken = lockToken.Remove(0, "az:LockToken:".Length);
+				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
+				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
 
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.end_device_ids.DeviceId);
+				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
 				if (deviceClient == null)
 				{
-					Console.WriteLine($" DownlinkMessageQueued unknown DeviceID: {payload.end_device_ids.DeviceId}");
+					Console.WriteLine($" DownlinkMessageFailed unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
 					return;
 				}
 
@@ -656,7 +725,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 								Port = port,
 								CorrelationIds = new List<string>()
 								{
-									$"az:LockToken:{message.LockToken}"
+									$"{Constants.AzureCorrelationPrefix}{message.LockToken}"
 								}
 							}
 						}
