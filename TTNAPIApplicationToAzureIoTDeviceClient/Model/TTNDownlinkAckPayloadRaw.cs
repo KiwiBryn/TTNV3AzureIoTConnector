@@ -49,7 +49,7 @@ namespace devMobile.TheThingsNetwork.Models.DownlinkAckRaw
    {
       public EndDeviceIds end_device_ids { get; set; }
       public List<string> correlation_ids { get; set; }
-      public DateTime received_at { get; set; }
+      public String received_at { get; set; }
       public DownlinkAck downlink_ack { get; set; }
    }
 }
