@@ -231,8 +231,6 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
 		private static async void MqttClientApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs e)
 		{
-			Console.WriteLine();
-
 			if (e.ApplicationMessage.Topic.EndsWith("/up", StringComparison.InvariantCultureIgnoreCase))
 			{
 				await UplinkMessageReceived(e);
@@ -283,7 +281,10 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
 				string deviceId = payload.EndDeviceIds.DeviceId;
 				int port = payload.UplinkMessage.Port;
+
+				Console.WriteLine();
 				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} TTN Uplink message");
+				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 #if DIAGNOSTICS_TTN_MQTT
 				Console.WriteLine($" ClientId:{e.ClientId} Topic:{e.ApplicationMessage.Topic}");
 				Console.WriteLine($" Cached: {DeviceClients.Contains(deviceId)}");
@@ -302,7 +303,6 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 				Console.WriteLine($" ApplicationID: {applicationId}");
 				Console.WriteLine($" DeviceID: {deviceId}");
 				Console.WriteLine($" Port: {port}");
-				Console.WriteLine($" Payload raw: {payload.UplinkMessage.PayloadRaw}");
 
 				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(deviceId);
 				if (deviceClient == null)
