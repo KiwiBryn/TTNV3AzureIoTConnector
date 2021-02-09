@@ -24,69 +24,69 @@
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 {
-	using System;
-	using System.Collections.Generic;
-	using System.Diagnostics;
-	using System.Globalization;
-	using System.Linq;
-	using System.Net.Http;
-	using System.Runtime.Caching;
-	using System.Text;
-	using System.Threading.Tasks;
+   using System;
+   using System.Collections.Generic;
+   using System.Diagnostics;
+   using System.Globalization;
+   using System.Linq;
+   using System.Net.Http;
+   using System.Runtime.Caching;
+   using System.Text;
+   using System.Threading.Tasks;
 
-	using Microsoft.Azure.Devices.Client;
+   using Microsoft.Azure.Devices.Client;
 
-	using CommandLine;
-	using Newtonsoft.Json;
-	using Newtonsoft.Json.Linq;
+   using CommandLine;
+   using Newtonsoft.Json;
+   using Newtonsoft.Json.Linq;
 
-	using MQTTnet;
-	using MQTTnet.Client;
-	using MQTTnet.Client.Disconnecting;
-	using MQTTnet.Client.Options;
-	using MQTTnet.Client.Publishing;
-	using MQTTnet.Client.Receiving;
+   using MQTTnet;
+   using MQTTnet.Client;
+   using MQTTnet.Client.Disconnecting;
+   using MQTTnet.Client.Options;
+   using MQTTnet.Client.Publishing;
+   using MQTTnet.Client.Receiving;
 
-	using devMobile.TheThingsNetwork.API;
-	using devMobile.TheThingsNetwork.Models;
+   using devMobile.TheThingsNetwork.API;
+   using devMobile.TheThingsNetwork.Models;
 
    public static class Program
-	{
-		private static IMqttClient mqttClient = null;
-		private static IMqttClientOptions mqttOptions = null;
-		private static readonly ObjectCache DeviceClients = MemoryCache.Default;
+   {
+      private static IMqttClient mqttClient = null;
+      private static IMqttClientOptions mqttOptions = null;
+      private static readonly ObjectCache DeviceClients = MemoryCache.Default;
 
-		public static async Task Main(string[] args)
-		{
-			Console.WriteLine("TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient starting");
-			Console.WriteLine();
+      public static async Task Main(string[] args)
+      {
+         Console.WriteLine("TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient starting");
+         Console.WriteLine();
 
-			await Parser.Default.ParseArguments<CommandLineOptions>(args)
-				.WithNotParsed(HandleParseError)
-				.WithParsedAsync(ApplicationCore);
-		}
+         await Parser.Default.ParseArguments<CommandLineOptions>(args)
+            .WithNotParsed(HandleParseError)
+            .WithParsedAsync(ApplicationCore);
+      }
 
-		private static void HandleParseError(IEnumerable<Error> errors)
-		{
-			if (errors.IsVersion())
-			{
-				Console.WriteLine("Version Request");
-				return;
-			}
+      private static void HandleParseError(IEnumerable<Error> errors)
+      {
+         if (errors.IsVersion())
+         {
+            Console.WriteLine("Version Request");
+            return;
+         }
 
-			if (errors.IsHelp())
-			{
-				Console.WriteLine("Help Request");
-				return;
-			}
-			Console.WriteLine("Parser Fail");
-		}
+         if (errors.IsHelp())
+         {
+            Console.WriteLine("Help Request");
+            return;
+         }
+         Console.WriteLine("Parser Fail");
+      }
 
-		private static async Task ApplicationCore(CommandLineOptions options)
-		{
-			CacheItemPolicy cacheItemPolicy = new CacheItemPolicy();
-			MqttFactory factory = new MqttFactory();
-			mqttClient = factory.CreateMqttClient();
+      private static async Task ApplicationCore(CommandLineOptions options)
+      {
+         CacheItemPolicy cacheItemPolicy = new CacheItemPolicy();
+         MqttFactory factory = new MqttFactory();
+         mqttClient = factory.CreateMqttClient();
 
 #if DIAGNOSTICS
 			Console.WriteLine($"Tennant: {options.Tennant}");
@@ -97,40 +97,40 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 			Console.WriteLine();
 #endif
 
-			try
-			{
-				// First configure MQTT, open connection and wire up disconnection handler. 
-				mqttOptions = new MqttClientOptionsBuilder()
-					.WithTcpServer(options.MqttServerName)
-					.WithCredentials($"{options.ApiApplicationID}@{options.Tenant}", options.MqttAccessKey)
-					.WithClientId(options.MqttClientID)
-					.WithTls()
-					.Build();
+         try
+         {
+            // First configure MQTT, open connection and wire up disconnection handler. 
+            mqttOptions = new MqttClientOptionsBuilder()
+               .WithTcpServer(options.MqttServerName)
+               .WithCredentials($"{options.ApiApplicationID}@{options.Tenant}", options.MqttAccessKey)
+               .WithClientId(options.MqttClientID)
+               .WithTls()
+               .Build();
 
-				mqttClient.UseDisconnectedHandler(new MqttClientDisconnectedHandlerDelegate(e => MqttClientDisconnected(e)));
+            mqttClient.UseDisconnectedHandler(new MqttClientDisconnectedHandlerDelegate(e => MqttClientDisconnected(e)));
 
-				await mqttClient.ConnectAsync(mqttOptions);
+            await mqttClient.ConnectAsync(mqttOptions);
 
-				// Prepare the HTTP client to be used in the TTN device enumeration
-				using (HttpClient httpClient = new HttpClient())
-				{
-					EndDeviceRegistryClient endDeviceRegistryClient = new EndDeviceRegistryClient(options.ApiBaseUrl, httpClient)
-					{
-						ApiKey = options.ApiKey
-					};
+            // Prepare the HTTP client to be used in the TTN device enumeration
+            using (HttpClient httpClient = new HttpClient())
+            {
+               EndDeviceRegistryClient endDeviceRegistryClient = new EndDeviceRegistryClient(options.ApiBaseUrl, httpClient)
+               {
+                  ApiKey = options.ApiKey
+               };
 
-					// Retrieve list of devices page by page
-					V3EndDevices endDevices = await endDeviceRegistryClient.ListAsync(
-						options.ApiApplicationID,
-						field_mask_paths: Constants.DevicefieldMaskPaths,
-						limit: options.DevicePageSize);
-					if ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
-					{
-						foreach (V3EndDevice endDevice in endDevices.End_devices)
-						{
-							// Display the device info+attributes then connect device to Azure IoT Hub
+               // Retrieve list of devices page by page
+               V3EndDevices endDevices = await endDeviceRegistryClient.ListAsync(
+                  options.ApiApplicationID,
+                  field_mask_paths: Constants.DevicefieldMaskPaths,
+                  limit: options.DevicePageSize);
+               if ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
+               {
+                  foreach (V3EndDevice endDevice in endDevices.End_devices)
+                  {
+                     // Display the device info+attributes then connect device to Azure IoT Hub
 #if DEVICE_FIELDS_MINIMUM
-							Console.WriteLine($"EndDevice ID: {endDevice.Ids.Device_id}");
+                     Console.WriteLine($"EndDevice ID: {endDevice.Ids.Device_id}");
 #else
 							Console.WriteLine($"Device ID: {endDevice.Ids.Device_id} Name: {endDevice.Name} Description: {endDevice.Description}");
 							Console.WriteLine($"  CreatedAt: {endDevice.Created_at:dd-MM-yy HH:mm:ss} UpdatedAt: {endDevice.Updated_at:dd-MM-yy HH:mm:ss}");
@@ -147,144 +147,139 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 								}
 							}
 #endif
-							try
-							{
-								DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(
-									options.AzureIoTHubconnectionString,
-									endDevice.Ids.Device_id,
-									TransportType.Amqp_Tcp_Only);
+                     try
+                     {
+                        DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(
+                           options.AzureIoTHubconnectionString,
+                           endDevice.Ids.Device_id,
+                           TransportType.Amqp_Tcp_Only);
 
-								await deviceClient.OpenAsync();
+                        await deviceClient.OpenAsync();
 
-								DeviceClients.Add(endDevice.Ids.Device_id, deviceClient, cacheItemPolicy);
+                        DeviceClients.Add(endDevice.Ids.Device_id, deviceClient, cacheItemPolicy);
 
-								AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
-								{
-									TenantId = options.Tenant,
-									DeviceId = endDevice.Ids.Device_id,
-									ApplicationId = options.ApiApplicationID,
-								};
+                        AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
+                        {
+                           TenantId = options.Tenant,
+                           DeviceId = endDevice.Ids.Device_id,
+                           ApplicationId = options.ApiApplicationID,
+                        };
 
-								await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context);
+                        await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context);
 
-								await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context);
-							}
-							catch( Exception ex)
-							{
-								Console.WriteLine($"Azure IoT Hub OpenAsync failed {ex.Message}");
-							}
-						}
-					}
-				}
+                        await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context);
+                     }
+                     catch( Exception ex)
+                     {
+                        Console.WriteLine($"Azure IoT Hub OpenAsync failed {ex.Message}");
+                     }
+                  }
+               }
+            }
 
-				// At this point all the AzureIoT Hub deviceClients setup and ready to go so can enable MQTT receive
-				mqttClient.UseApplicationMessageReceivedHandler(new MqttApplicationMessageReceivedHandlerDelegate(e => MqttClientApplicationMessageReceived(e)));
+            // At this point all the AzureIoT Hub deviceClients setup and ready to go so can enable MQTT receive
+            mqttClient.UseApplicationMessageReceivedHandler(new MqttApplicationMessageReceivedHandlerDelegate(e => MqttClientApplicationMessageReceived(e)));
 
-				// These may shift to individual device subscriptions
-				string uplinkTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/up";
-				await mqttClient.SubscribeAsync(uplinkTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+            // These may shift to individual device subscriptions
+            string uplinkTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/up";
+            await mqttClient.SubscribeAsync(uplinkTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-				string queuedTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/queued";
-				await mqttClient.SubscribeAsync(queuedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+            string queuedTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/queued";
+            await mqttClient.SubscribeAsync(queuedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-				string sentTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/sent";
-				await mqttClient.SubscribeAsync(sentTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+            // TODO : Sent topic currently not processed, see https://github.com/TheThingsNetwork/lorawan-stack/issues/76
+            //string sentTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/sent";
+            //await mqttClient.SubscribeAsync(sentTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-				string ackTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/ack";
-				await mqttClient.SubscribeAsync(ackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+            string ackTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/ack";
+            await mqttClient.SubscribeAsync(ackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-				string nackTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/nack";
-				await mqttClient.SubscribeAsync(nackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+            string nackTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/nack";
+            await mqttClient.SubscribeAsync(nackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-				string failedTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/failed";
-				await mqttClient.SubscribeAsync(failedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-			}
-			catch(Exception ex)
-			{
-				Console.WriteLine($"Main {ex.Message}");
-				Console.WriteLine("Press any key to exit");
-				Console.ReadLine();
-				return;
-			}
+            string failedTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/failed";
+            await mqttClient.SubscribeAsync(failedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+         }
+         catch(Exception ex)
+         {
+            Console.WriteLine($"Main {ex.Message}");
+            Console.WriteLine("Press any key to exit");
+            Console.ReadLine();
+            return;
+         }
 
-			while (!Console.KeyAvailable)
-			{
-				Console.Write(".");
-				await Task.Delay(1000);
-			}
+         while (!Console.KeyAvailable)
+         {
+            Console.Write(".");
+            await Task.Delay(1000);
+         }
 
-			// Mop up Azure IoT connections and MQTT COnnection for applications
-			foreach (KeyValuePair<string, object> device in DeviceClients)
-			{
-				DeviceClient deviceClient = (DeviceClient)device.Value;
+         // Mop up Azure IoT connections and MQTT COnnection for applications
+         foreach (KeyValuePair<string, object> device in DeviceClients)
+         {
+            DeviceClient deviceClient = (DeviceClient)device.Value;
 
-				await deviceClient.CloseAsync();
+            await deviceClient.CloseAsync();
 
-				deviceClient.Dispose();
-			}
+            deviceClient.Dispose();
+         }
 
-			await mqttClient.DisconnectAsync();
+         await mqttClient.DisconnectAsync();
 
-			Console.WriteLine("Press any key to exit");
-			Console.ReadLine();
-		}
+         Console.WriteLine("Press <enter> key to exit");
+         Console.ReadLine();
+      }
 
-		private static async void MqttClientApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs e)
-		{
-			if (e.ApplicationMessage.Topic.EndsWith("/up", StringComparison.InvariantCultureIgnoreCase))
-			{
-				await UplinkMessageReceived(e);
-				return;
-			}
+      private static async void MqttClientApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs e)
+      {
+         if (e.ApplicationMessage.Topic.EndsWith("/up", StringComparison.InvariantCultureIgnoreCase))
+         {
+            await UplinkMessageReceived(e);
+            return;
+         }
 
-			// Something other than an uplink message
-			if (e.ApplicationMessage.Topic.EndsWith("/queued", StringComparison.InvariantCultureIgnoreCase))
-			{
-				await DownlinkMessageQueued(e);
-				return;
-			}
+         // Something other than an uplink message
+         if (e.ApplicationMessage.Topic.EndsWith("/queued", StringComparison.InvariantCultureIgnoreCase))
+         {
+            await DownlinkMessageQueued(e);
+            return;
+         }
 
-			if (e.ApplicationMessage.Topic.EndsWith("/sent", StringComparison.InvariantCultureIgnoreCase))
-			{
-				await DownlinkMessageSent(e);
-				return;
-			}
+         if (e.ApplicationMessage.Topic.EndsWith("/ack", StringComparison.InvariantCultureIgnoreCase))
+         {
+            await DownlinkMessageAck(e);
+            return;
+         }
 
-			if (e.ApplicationMessage.Topic.EndsWith("/ack", StringComparison.InvariantCultureIgnoreCase))
-			{
-				await DownlinkMessageAck(e);
-				return;
-			}
+         if (e.ApplicationMessage.Topic.EndsWith("/nack", StringComparison.InvariantCultureIgnoreCase))
+         {
+            await DownlinkMessageNack(e);
+            return;
+         }
 
-			if (e.ApplicationMessage.Topic.EndsWith("/nack", StringComparison.InvariantCultureIgnoreCase))
-			{
-				await DownlinkMessageNack(e);
-				return;
-			}
+         if (e.ApplicationMessage.Topic.EndsWith("/failed", StringComparison.InvariantCultureIgnoreCase))
+         {
+            await DownlinkMessageFailed(e);
+            return;
+         }
 
-			if (e.ApplicationMessage.Topic.EndsWith("/failed", StringComparison.InvariantCultureIgnoreCase))
-			{
-				await DownlinkMessageFailed(e);
-				return;
-			}
+         Console.WriteLine($"Unknown {e.ApplicationMessage.Topic}");
+         Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+      }
 
-			Console.WriteLine($"Unknown {e.ApplicationMessage.Topic}");
-			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-		}
+      static async Task UplinkMessageReceived(MqttApplicationMessageReceivedEventArgs e)
+      {
+         try
+         {
+            PayloadUplink payload = JsonConvert.DeserializeObject<PayloadUplink>(e.ApplicationMessage.ConvertPayloadToString());
 
-		static async Task UplinkMessageReceived(MqttApplicationMessageReceivedEventArgs e)
-		{
-			try
-			{
-				PayloadUplink payload = JsonConvert.DeserializeObject<PayloadUplink>(e.ApplicationMessage.ConvertPayloadToString());
+            string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
+            string deviceId = payload.EndDeviceIds.DeviceId;
+            int port = payload.UplinkMessage.Port;
 
-				string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
-				string deviceId = payload.EndDeviceIds.DeviceId;
-				int port = payload.UplinkMessage.Port;
-
-				Console.WriteLine();
-				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} TTN Uplink message");
-				Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+            Console.WriteLine();
+            Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} TTN Uplink message");
+            Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 #if DIAGNOSTICS_TTN_MQTT
 				Console.WriteLine($" ClientId:{e.ClientId} Topic:{e.ApplicationMessage.Topic}");
 				Console.WriteLine($" Cached: {DeviceClients.Contains(deviceId)}");
@@ -300,329 +295,296 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 					}
 				}
 #endif
-				Console.WriteLine($" ApplicationID: {applicationId}");
-				Console.WriteLine($" DeviceID: {deviceId}");
-				Console.WriteLine($" Port: {port}");
+            Console.WriteLine($" ApplicationID: {applicationId}");
+            Console.WriteLine($" DeviceID: {deviceId}");
+            Console.WriteLine($" Port: {port}");
 
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(deviceId);
-				if (deviceClient == null)
-				{
-					Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {deviceId}");
-					return;
-				}
+            DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(deviceId);
+            if (deviceClient == null)
+            {
+               Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {deviceId}");
+               return;
+            }
 
-				JObject telemetryEvent = new JObject();
+            JObject telemetryEvent = new JObject();
 
-				telemetryEvent.Add("ApplicationID", applicationId);
-				telemetryEvent.Add("DeviceID", deviceId);
-				telemetryEvent.Add("Port", port);
-				telemetryEvent.Add("PayloadRaw", payload.UplinkMessage.PayloadRaw);
+            telemetryEvent.Add("ApplicationID", applicationId);
+            telemetryEvent.Add("DeviceID", deviceId);
+            telemetryEvent.Add("Port", port);
+            telemetryEvent.Add("PayloadRaw", payload.UplinkMessage.PayloadRaw);
 
-				// If the payload has been unpacked in TTN backend add fields to telemetry event payload
-				if (payload.UplinkMessage.PayloadDecoded != null)
-				{
-					EnumerateChildren(telemetryEvent, payload.UplinkMessage.PayloadDecoded);
-				}
+            // If the payload has been unpacked in TTN backend add fields to telemetry event payload
+            if (payload.UplinkMessage.PayloadDecoded != null)
+            {
+               EnumerateChildren(telemetryEvent, payload.UplinkMessage.PayloadDecoded);
+            }
 
-				// Send the message to Azure IoT Hub/Azure IoT Central
-				using (Message ioTHubmessage = new Message(Encoding.ASCII.GetBytes(JsonConvert.SerializeObject(telemetryEvent))))
-				{
-					// Ensure the displayed time is the acquired time rather than the uploaded time. 
-					ioTHubmessage.Properties.Add("iothub-creation-time-utc", payload.UplinkMessage.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
-					ioTHubmessage.Properties.Add("ApplicationId", applicationId);
-					ioTHubmessage.Properties.Add("DeviceId", deviceId);
-					ioTHubmessage.Properties.Add("port", port.ToString());
+            // Send the message to Azure IoT Hub/Azure IoT Central
+            using (Message ioTHubmessage = new Message(Encoding.ASCII.GetBytes(JsonConvert.SerializeObject(telemetryEvent))))
+            {
+               // Ensure the displayed time is the acquired time rather than the uploaded time. 
+               ioTHubmessage.Properties.Add("iothub-creation-time-utc", payload.UplinkMessage.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
+               ioTHubmessage.Properties.Add("ApplicationId", applicationId);
+               ioTHubmessage.Properties.Add("DeviceId", deviceId);
+               ioTHubmessage.Properties.Add("port", port.ToString());
 
-					await deviceClient.SendEventAsync(ioTHubmessage);
-				}
-			}
-			catch( Exception ex)
-			{
-				Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
-			}
-		}
-
-		static async Task DownlinkMessageQueued(MqttApplicationMessageReceivedEventArgs e)
-      {
-			Console.WriteLine();
-			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Queued: {e.ApplicationMessage.Topic}");
-			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-			DownlinkQueuedPayload payload = JsonConvert.DeserializeObject<DownlinkQueuedPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if ( payload == null)
+               await deviceClient.SendEventAsync(ioTHubmessage);
+            }
+         }
+         catch( Exception ex)
          {
-				Console.WriteLine($" Queued: {e.ApplicationMessage.Topic} payload invalid");
-				return;
+            Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
+         }
+      }
+
+      static async Task DownlinkMessageQueued(MqttApplicationMessageReceivedEventArgs e)
+      {
+         Console.WriteLine();
+         Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Queued: {e.ApplicationMessage.Topic}");
+         Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+         DownlinkQueuedPayload payload = JsonConvert.DeserializeObject<DownlinkQueuedPayload>(e.ApplicationMessage.ConvertPayloadToString());
+         if (payload == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Queued: Payload invalid");
+            return;
          }
 
-			if (!payload.DownlinkQueued.Confirmed)
-			{
-				bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+         if (payload.DownlinkQueued.Confirmed)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Queued: Confirmed delivery");
+            return;
+         }
 
-				if (result)
-				{
-					Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
-					string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-					lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
+         Console.WriteLine($" Queued: Unconfirmed delivery");
 
-					DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
-					if (deviceClient == null)
-					{
-						Console.WriteLine($" DownlinkMessageQueued unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
-						return;
-					}
+         if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Queued: Azure IoT Hub message correlationID {Constants.AzureCorrelationPrefix} not found");
+            return;
+         }
 
-					try
-					{
-						await deviceClient.CompleteAsync(lockToken);
-					}
-					catch( Exception ex)
+         DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+         if (deviceClient == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Queued: Unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+            return;
+         }
+
+         try
+         {
+            await deviceClient.CompleteAsync(lockToken);
+         }
+         catch (Exception ex)
+         {
+            Console.WriteLine();
+            Console.WriteLine(ex.Message);
+         }
+      }
+
+      static async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
+      {
+         Console.WriteLine();
+         Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Ack: {e.ApplicationMessage.Topic}");
+         Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+         DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
+         if (payload == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Ack: Payload invalid");
+            return;
+         }
+
+         if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Ack: Azure IoT Hub message correlationID {Constants.AzureCorrelationPrefix} not found");
+            return;
+         }
+
+         DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+         if (deviceClient == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Ack: Unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+            return;
+         }
+
+         try
+         {
+            await deviceClient.CompleteAsync(lockToken);
+         }
+         catch (Exception ex)
+         {
+            Console.WriteLine();
+            Console.WriteLine(ex.Message);
+         }
+      }
+
+      static async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
+      {
+         Console.WriteLine();
+         Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Nack: {e.ApplicationMessage.Topic}");
+         Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+         DownlinkNackPayload payload = JsonConvert.DeserializeObject<DownlinkNackPayload>(e.ApplicationMessage.ConvertPayloadToString());
+         if (payload == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Nack: Payload invalid");
+            return;
+         }
+
+         if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Nack: Azure IoT Hub message correlationID {Constants.AzureCorrelationPrefix} not found");
+            return;
+         }
+
+         DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+         if (deviceClient == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Nak : Unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+            return;
+         }
+
+         try
+         {
+            await deviceClient.AbandonAsync(lockToken);
+         }
+         catch (Exception ex)
+         {
+            Console.WriteLine();
+            Console.WriteLine(ex.Message);
+         }
+      }
+
+      static async Task DownlinkMessageFailed(MqttApplicationMessageReceivedEventArgs e)
+      {
+         Console.WriteLine();
+         Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Failed: {e.ApplicationMessage.Topic}");
+         Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
+         DownlinkFailedPayload payload = JsonConvert.DeserializeObject<DownlinkFailedPayload>(e.ApplicationMessage.ConvertPayloadToString());
+         if (payload == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Failed: Payload invalid");
+            return;
+         }
+
+         if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Failed: Azure IoT Hub message correlationID {Constants.AzureCorrelationPrefix} not found");
+            return;
+         }
+
+         DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
+         if (deviceClient == null)
+         {
+            Console.WriteLine();
+            Console.WriteLine($" Failed: Unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
+            return;
+         }
+
+         try
+         {
+            await deviceClient.RejectAsync(lockToken);
+         }
+         catch (Exception ex)
+         {
+            Console.WriteLine();
+            Console.WriteLine(ex.Message);
+         }
+      }
+
+      private static void EnumerateChildren(JObject jobject, JToken token)
+      {
+         if (token is JProperty property)
+         {
+            if (token.First is JValue)
+            {
+               // Temporary dirty hack for Azure IoT Central compatibility
+               if (token.Parent is JObject possibleGpsProperty)
                {
-						Console.WriteLine(ex.Message);
+                  if (possibleGpsProperty.Path.StartsWith("GPS_", StringComparison.OrdinalIgnoreCase))
+                  {
+                     if (string.Compare(property.Name, "Latitude", true) == 0)
+                     {
+                        jobject.Add("lat", property.Value);
+                     }
+                     if (string.Compare(property.Name, "Longitude", true) == 0)
+                     {
+                        jobject.Add("lon", property.Value);
+                     }
+                     if (string.Compare(property.Name, "Altitude", true) == 0)
+                     {
+                        jobject.Add("alt", property.Value);
+                     }
+                  }
                }
-				}
-			}
-		}
+               jobject.Add(property.Name, property.Value);
+            }
+            else
+            {
+               JObject parentObject = new JObject();
+               foreach (JToken token2 in token.Children())
+               {
+                  EnumerateChildren(parentObject, token2);
+                  jobject.Add(property.Name, parentObject);
+               }
+            }
+         }
+         else
+         {
+            foreach (JToken token2 in token.Children())
+            {
+               EnumerateChildren(jobject, token2);
+            }
+         }
+      }
 
-		static async Task DownlinkMessageSent(MqttApplicationMessageReceivedEventArgs e)
-		{
-			Console.WriteLine();
-			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Sent: {e.ApplicationMessage.Topic}");
-			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-			DownlinkSentPayload payload = JsonConvert.DeserializeObject<DownlinkSentPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				Console.WriteLine($" Sent: {e.ApplicationMessage.Topic} payload invalid");
-				return;
-			}
-
-			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-
-			if (result)
-			{
-				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
-				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
-
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
-				if (deviceClient == null)
-				{
-					Console.WriteLine($" DownlinkMessageSent unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
-					return;
-				}
-
-				/* Not certain what todo here might be like sent it confirmed vs. unconfirmed
-				try
-				{
-					await deviceClient.CompleteAsync(lockToken);
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine(ex.Message);
-				}
-				*/
-			}
-		}
-
-		static async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
+      private async static Task<MethodResponse> AzureIoTHubClientDefaultMethodHandler(MethodRequest methodRequest, object userContext)
       {
-			Console.WriteLine();
-			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Ack: {e.ApplicationMessage.Topic}");
-			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+         Console.WriteLine($"AzureIoTHubClientDefaultMethodHandler name: {methodRequest.Name}");
+         return new MethodResponse(200);
+      }
 
-			DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				Console.WriteLine($" Ack: {e.ApplicationMessage.Topic} payload invalid");
-				return;
-			}
-
-			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-
-			if (result)
-			{
-				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
-				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
-
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
-				if (deviceClient == null)
-				{
-					Console.WriteLine($" DownlinkMessageAck unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
-					return;
-				}
-
-				try
-				{
-					await deviceClient.CompleteAsync(lockToken);
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine(ex.Message);
-				}
-			}
-		}
-
-		static async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
-		{
-			Console.WriteLine();
-			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Nack: {e.ApplicationMessage.Topic}");
-			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-			DownlinkNackPayload payload = JsonConvert.DeserializeObject<DownlinkNackPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				Console.WriteLine($" Nack: {e.ApplicationMessage.Topic} payload invalid");
-				return;
-			}
-
-
-			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-
-			if (result)
-			{
-				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
-				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
-
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
-				if (deviceClient == null)
-				{
-					Console.WriteLine($" DownlinkMessageNack unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
-					return;
-				}
-
-				try
-				{
-					await deviceClient.AbandonAsync(lockToken);
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine(ex.Message);
-				}
-			}
-		}
-
-		static async Task DownlinkMessageFailed(MqttApplicationMessageReceivedEventArgs e)
-		{
-			Console.WriteLine();
-			Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Failed: {e.ApplicationMessage.Topic}");
-			Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
-
-			DownlinkFailedPayload payload = JsonConvert.DeserializeObject<DownlinkFailedPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				Console.WriteLine($" Failed: {e.ApplicationMessage.Topic} payload invalid");
-				return;
-			}
-
-
-			bool result = payload.CorrelationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-
-			if (result)
-			{
-				Console.WriteLine($" Found {Constants.AzureCorrelationPrefix}");
-				string lockToken = payload.CorrelationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-				lockToken = lockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
-
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(payload.EndDeviceIds.DeviceId);
-				if (deviceClient == null)
-				{
-					Console.WriteLine($" DownlinkMessageFailed unknown DeviceID: {payload.EndDeviceIds.DeviceId}");
-					return;
-				}
-
-				try
-				{
-					await deviceClient.RejectAsync(lockToken);
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine(ex.Message);
-				}
-			}
-		}
-
-		private static void EnumerateChildren(JObject jobject, JToken token)
-		{
-			if (token is JProperty property)
-			{
-				if (token.First is JValue)
-				{
-					// Temporary dirty hack for Azure IoT Central compatibility
-					if (token.Parent is JObject possibleGpsProperty)
-					{
-						if (possibleGpsProperty.Path.StartsWith("GPS_", StringComparison.OrdinalIgnoreCase))
-						{
-							if (string.Compare(property.Name, "Latitude", true) == 0)
-							{
-								jobject.Add("lat", property.Value);
-							}
-							if (string.Compare(property.Name, "Longitude", true) == 0)
-							{
-								jobject.Add("lon", property.Value);
-							}
-							if (string.Compare(property.Name, "Altitude", true) == 0)
-							{
-								jobject.Add("alt", property.Value);
-							}
-						}
-					}
-					jobject.Add(property.Name, property.Value);
-				}
-				else
-				{
-					JObject parentObject = new JObject();
-					foreach (JToken token2 in token.Children())
-					{
-						EnumerateChildren(parentObject, token2);
-						jobject.Add(property.Name, parentObject);
-					}
-				}
-			}
-			else
-			{
-				foreach (JToken token2 in token.Children())
-				{
-					EnumerateChildren(jobject, token2);
-				}
-			}
-		}
-
-		private async static Task<MethodResponse> AzureIoTHubClientDefaultMethodHandler(MethodRequest methodRequest, object userContext)
-		{
-			Console.WriteLine($"AzureIoTHubClientDefaultMethodHandler name: {methodRequest.Name}");
-			return new MethodResponse(200);
-		}
-
-		private async static Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
+      private async static Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
       {
-			bool confirmed;
-			byte port;
-			DownlinkPriority priority;
-			string downlinktopic;
+         bool confirmed;
+         byte port;
+         DownlinkPriority priority;
+         string downlinktopic;
 
-			Console.WriteLine();
+         Console.WriteLine();
 
-			try
-			{
-				AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
+         try
+         {
+            AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
 
-				DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(receiveMessageHandlerConext.DeviceId);
-				if (deviceClient == null)
-				{
-					Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {receiveMessageHandlerConext.DeviceId}");
-					//await deviceClient.RejectAsync(message);
-					return;
-				}
+            DeviceClient deviceClient = (DeviceClient)DeviceClients.Get(receiveMessageHandlerConext.DeviceId);
+            if (deviceClient == null)
+            {
+               Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {receiveMessageHandlerConext.DeviceId}");
+               //await deviceClient.RejectAsync(message);
+               return;
+            }
 
-				using (message)
-				{
-	  				Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
-					Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
-					Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
-					Console.WriteLine($" LockToken: {message.LockToken}");
+            using (message)
+            {
+               Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
+               Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
+               Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
+               Console.WriteLine($" LockToken: {message.LockToken}");
 
 #if DIAGNOSTICS_AZURE_IOT_HUB
 					Console.WriteLine($" Cached: {DeviceClients.Contains(receiveMessageHandlerConext.DeviceId)}");
@@ -632,135 +594,152 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 					Console.WriteLine($" SequenceNumber: {message.SequenceNumber}");
 					Console.WriteLine($" To: {message.To}");
 #endif
-					string messageBody = Encoding.UTF8.GetString(message.GetBytes());
-					Console.WriteLine($" Body: {messageBody}");
+               string messageBody = Encoding.UTF8.GetString(message.GetBytes());
+               Console.WriteLine($" Body: {messageBody}");
 #if DOWNLINK_MESSAGE_PROPERTIES_DISPLAY
 					foreach (var property in message.Properties)
 					{
 						Console.WriteLine($"   Key:{property.Key} Value:{property.Value}");
 					}
 #endif
-					if (!message.Properties.ContainsKey("Confirmed"))
-					{
-						Console.WriteLine(" UplinkMessageReceived missing confirmed property");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if (!message.Properties.ContainsKey("Confirmed"))
+               {
+                  Console.WriteLine(" UplinkMessageReceived missing confirmed property");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					if (!bool.TryParse(message.Properties["Confirmed"], out confirmed))
-					{
-						Console.WriteLine(" UplinkMessageReceived confirmed property invalid");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if (!bool.TryParse(message.Properties["Confirmed"], out confirmed))
+               {
+                  Console.WriteLine(" UplinkMessageReceived confirmed property invalid");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					if (!message.Properties.ContainsKey("Priority"))
-					{
-						Console.WriteLine(" UplinkMessageReceived missing priority property");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if (!message.Properties.ContainsKey("Priority"))
+               {
+                  Console.WriteLine(" UplinkMessageReceived missing priority property");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					string priorityPoperty = message.Properties["Priority"];
+               string priorityPoperty = message.Properties["Priority"];
 
-					if (!Enum.TryParse(priorityPoperty, true, out priority) || !Enum.IsDefined(typeof(DownlinkPriority), priority))
-					{
-						Console.WriteLine(" UplinkMessageReceived priority property invalid");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if (!Enum.TryParse(priorityPoperty, true, out priority) || !Enum.IsDefined(typeof(DownlinkPriority), priority))
+               {
+                  Console.WriteLine(" UplinkMessageReceived priority property invalid");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					if (!message.Properties.ContainsKey("Port"))
-					{
-						Console.WriteLine(" UplinkMessageReceived missing port number property");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if (!message.Properties.ContainsKey("Port"))
+               {
+                  Console.WriteLine(" UplinkMessageReceived missing port number property");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					if (!byte.TryParse( message.Properties["Port"], out port))
-					{
-						Console.WriteLine(" UplinkMessageReceived port number property invalid");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if (!byte.TryParse( message.Properties["Port"], out port))
+               {
+                  Console.WriteLine(" UplinkMessageReceived port number property invalid");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					if ((port < Constants.PortNumberMinimum) || port > (Constants.PortNumberMaximum))
-					{
-						Console.WriteLine($" UplinkMessageReceived port number {port} is invalid value must be between {Constants.PortNumberMinimum} and {Constants.PortNumberMaximum}");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if ((port < Constants.PortNumberMinimum) || port > (Constants.PortNumberMaximum))
+               {
+                  Console.WriteLine($" UplinkMessageReceived port number {port} is invalid value must be between {Constants.PortNumberMinimum} and {Constants.PortNumberMaximum}");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					if (!message.Properties.ContainsKey("Queue"))
-					{
-						Console.WriteLine(" UplinkMessageReceived missing queue property");
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+               if (!message.Properties.ContainsKey("Queue"))
+               {
+                  Console.WriteLine(" UplinkMessageReceived missing queue property");
+                  await deviceClient.RejectAsync(message);
+                  return;
+               }
 
-					string queueProperty = message.Properties["Queue"].ToLower();
-					switch (queueProperty)
-					{
-						case "push":
-							downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/push";
-							break;
-						case "replace":
-							downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/replace";
-							break;
-						default:
-							Console.WriteLine(" UplinkMessageReceived missing queue {queueProperty} property invalid value");
-							await deviceClient.RejectAsync(message);
-							return;
-					}
+               string queueProperty = message.Properties["Queue"].ToLower();
+               switch (queueProperty)
+               {
+                  case "push":
+                     downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/push";
+                     break;
+                  case "replace":
+                     downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/replace";
+                     break;
+                  default:
+                     Console.WriteLine(" UplinkMessageReceived missing queue {queueProperty} property invalid value");
+                     await deviceClient.RejectAsync(message);
+                     return;
+               }
 
-					DownlinkPayload Payload = new DownlinkPayload()
-					{
-						Downlinks = new List<Downlink>()
-						{
-							new Downlink()
-							{
-								Confirmed = confirmed,
-								PayloadRaw = messageBody,
-								Priority = priority,
-								Port = port,
-								CorrelationIds = new List<string>()
-								{
-									$"{Constants.AzureCorrelationPrefix}{message.LockToken}"
-								}
-							}
-						}
-					};
+               DownlinkPayload Payload = new DownlinkPayload()
+               {
+                  Downlinks = new List<Downlink>()
+                  {
+                     new Downlink()
+                     {
+                        Confirmed = confirmed,
+                        PayloadRaw = messageBody,
+                        Priority = priority,
+                        Port = port,
+                        CorrelationIds = new List<string>()
+                        {
+                           $"{Constants.AzureCorrelationPrefix}{message.LockToken}"
+                        }
+                     }
+                  }
+               };
 
-					var mqttMessage = new MqttApplicationMessageBuilder()
-											.WithTopic(downlinktopic)
-											.WithPayload(JsonConvert.SerializeObject(Payload))
-											.WithAtLeastOnceQoS()
-											.Build();
+               var mqttMessage = new MqttApplicationMessageBuilder()
+                                 .WithTopic(downlinktopic)
+                                 .WithPayload(JsonConvert.SerializeObject(Payload))
+                                 .WithAtLeastOnceQoS()
+                                 .Build();
 
-					await mqttClient.PublishAsync(mqttMessage);
+               await mqttClient.PublishAsync(mqttMessage);
 
-					Console.WriteLine();
-				}
-			}
-			catch (Exception ex)
-			{
-				Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
-			}
-		}
+               Console.WriteLine();
+            }
+         }
+         catch (Exception ex)
+         {
+            Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
+         }
+      }
 
-		private static async void MqttClientDisconnected(MqttClientDisconnectedEventArgs e)
-		{
-			Debug.WriteLine($"Disconnected: {e.ReasonCode}");
-			await Task.Delay(TimeSpan.FromSeconds(5));
+      private static async void MqttClientDisconnected(MqttClientDisconnectedEventArgs e)
+      {
+         Debug.WriteLine($"Disconnected: {e.ReasonCode}");
+         await Task.Delay(TimeSpan.FromSeconds(5));
 
-			try
-			{
-				await mqttClient.ConnectAsync(mqttOptions);
-			}
-			catch (Exception ex)
-			{
-				Debug.WriteLine("Reconnect failed: {0}", ex.Message);
-			}
-		}
-	}
+         try
+         {
+            await mqttClient.ConnectAsync(mqttOptions);
+         }
+         catch (Exception ex)
+         {
+            Debug.WriteLine("Reconnect failed: {0}", ex.Message);
+         }
+      }
+
+      private static bool AzureLockTokenTryGet(List<string> correlationIds, out string azureLockToken)
+      {
+         azureLockToken = string.Empty;
+
+         // if AzureCorrelationPrefix prefix not found bug out
+         if (!correlationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix)))
+         {
+            return false;
+         }
+
+         azureLockToken = correlationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
+
+         azureLockToken = azureLockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
+
+         return true;
+      }
+   }
 }
