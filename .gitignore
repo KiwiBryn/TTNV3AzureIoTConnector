@@ -344,3 +344,4 @@ healthchecksdb
 /AzureWorkerService/Properties/launchSettings.json
 /AzureWorkerService/appsettings.Development.json
 /AzureWorkerService/appsettings.Production.json
+*.json
