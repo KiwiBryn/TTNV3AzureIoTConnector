@@ -3,9 +3,17 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <UserSecretsId>dotnet-TheThingsIndustriesAzureIoTConnector-72C49303-505A-41BB-99B7-166D89074BFB</UserSecretsId>
+    <RootNamespace>devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.16.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.ApplicationInsights" Version="2.16.0" />
+    <PackageReference Include="System.Collections" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TTNAPIOpenAPIClient\TTNAPIOpenAPIClient.csproj" />
   </ItemGroup>
 </Project>
