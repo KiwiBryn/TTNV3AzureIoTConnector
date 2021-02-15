@@ -61,4 +61,12 @@ namespace devMobile.TheThingsNetwork.Models
       [EnumMember(Value = "HIGHEST")]
       Highest,
    }
+
+   public enum DownlinkQueue
+   {
+      [EnumMember(Value = "push")]
+      Push,
+      [EnumMember(Value = "replace")]
+      Replace,
+   }
 }

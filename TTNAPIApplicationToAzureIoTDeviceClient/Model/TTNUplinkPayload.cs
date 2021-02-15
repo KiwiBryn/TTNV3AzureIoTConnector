@@ -124,7 +124,7 @@ namespace devMobile.TheThingsNetwork.Models
       public int Counter { get; set; }
 
       [JsonProperty("f_port")]
-      public int Port { get; set; }
+      public int? Port { get; set; }
 
       [JsonProperty("decoded_payload")]
       public JToken PayloadDecoded { get; set; }

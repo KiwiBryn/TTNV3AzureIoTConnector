@@ -89,7 +89,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
          mqttClient = factory.CreateMqttClient();
 
 #if DIAGNOSTICS
-			Console.WriteLine($"Tennant: {options.Tennant}");
+			Console.WriteLine($"Tennant: {options.Tenant}");
 			Console.WriteLine($"baseURL: {options.ApiBaseUrl}");
 			Console.WriteLine($"APIKey: {options.ApiKey}");
 			Console.WriteLine($"ApplicationID: {options.ApiApplicationID}");
@@ -169,8 +169,9 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
                         await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context);
                      }
-                     catch( Exception ex)
+                     catch (Exception ex)
                      {
+                        Console.WriteLine();
                         Console.WriteLine($"Azure IoT Hub OpenAsync failed {ex.Message}");
                      }
                   }
@@ -200,8 +201,9 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
             string failedTopic = $"v3/{options.ApiApplicationID}@{options.Tenant}/devices/+/down/failed";
             await mqttClient.SubscribeAsync(failedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
          }
-         catch(Exception ex)
+         catch (Exception ex)
          {
+            Console.WriteLine();
             Console.WriteLine($"Main {ex.Message}");
             Console.WriteLine("Press any key to exit");
             Console.ReadLine();
@@ -269,21 +271,26 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 
       static async Task UplinkMessageReceived(MqttApplicationMessageReceivedEventArgs e)
       {
+         Console.WriteLine();
+         Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Uplink: {e.ApplicationMessage.Topic}");
+         Console.WriteLine($" Payload: {e.ApplicationMessage.ConvertPayloadToString()}");
+
          try
          {
             PayloadUplink payload = JsonConvert.DeserializeObject<PayloadUplink>(e.ApplicationMessage.ConvertPayloadToString());
+            if (payload == null)
+            {
+               Console.WriteLine($" Uplink: Payload invalid");
+               return;
+            }
 
-            string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
-            string deviceId = payload.EndDeviceIds.DeviceId;
-            int port = payload.UplinkMessage.Port;
+            if (!payload.UplinkMessage.Port.HasValue)
+            {
+               Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} TTN Control message");
+               return;
+            }
 
-            Console.WriteLine();
-            Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} TTN Uplink message");
-            Console.WriteLine($" payload: {e.ApplicationMessage.ConvertPayloadToString()}");
 #if DIAGNOSTICS_TTN_MQTT
-				Console.WriteLine($" ClientId:{e.ClientId} Topic:{e.ApplicationMessage.Topic}");
-				Console.WriteLine($" Cached: {DeviceClients.Contains(deviceId)}");
-
 				if (payload.UplinkMessage.RXMetadata != null)
 				{
 					foreach (RxMetadata rxMetaData in payload.UplinkMessage.RXMetadata)
@@ -295,6 +302,10 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 					}
 				}
 #endif
+            string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
+            string deviceId = payload.EndDeviceIds.DeviceId;
+            int port = payload.UplinkMessage.Port.Value;
+
             Console.WriteLine($" ApplicationID: {applicationId}");
             Console.WriteLine($" DeviceID: {deviceId}");
             Console.WriteLine($" Port: {port}");
@@ -331,9 +342,10 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
                await deviceClient.SendEventAsync(ioTHubmessage);
             }
          }
-         catch( Exception ex)
+         catch (Exception ex)
          {
-            Debug.WriteLine("UplinkMessageReceived failed: {0}", ex.Message);
+            Console.WriteLine();
+            Console.WriteLine("Uplink failed: {0}", ex.Message);
          }
       }
 
@@ -351,6 +363,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
             return;
          }
 
+         // The confirmation is done in the Ack/Nack/Failed message handler
          if (payload.DownlinkQueued.Confirmed)
          {
             Console.WriteLine();
@@ -382,7 +395,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
          catch (Exception ex)
          {
             Console.WriteLine();
-            Console.WriteLine(ex.Message);
+            Console.WriteLine( $" Queued CompleteAsync failed: {ex.Message}");
          }
       }
 
@@ -422,7 +435,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
          catch (Exception ex)
          {
             Console.WriteLine();
-            Console.WriteLine(ex.Message);
+            Console.WriteLine($" Ack CompleteAsync failed: {ex.Message}");
          }
       }
 
@@ -462,7 +475,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
          catch (Exception ex)
          {
             Console.WriteLine();
-            Console.WriteLine(ex.Message);
+            Console.WriteLine($" Nack AbandonAsync failed: {ex.Message}");
          }
       }
 
@@ -502,7 +515,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
          catch (Exception ex)
          {
             Console.WriteLine();
-            Console.WriteLine(ex.Message);
+            Console.WriteLine($" Failed Reject: {ex.Message}");
          }
       }
 
@@ -563,7 +576,7 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
          bool confirmed;
          byte port;
          DownlinkPriority priority;
-         string downlinktopic;
+         DownlinkQueue queue;
 
          Console.WriteLine();
 
@@ -575,24 +588,22 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
             if (deviceClient == null)
             {
                Console.WriteLine($" UplinkMessageReceived unknown DeviceID: {receiveMessageHandlerConext.DeviceId}");
-               //await deviceClient.RejectAsync(message);
                return;
             }
 
             using (message)
             {
-               Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
-               Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
-               Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
-               Console.WriteLine($" LockToken: {message.LockToken}");
-
 #if DIAGNOSTICS_AZURE_IOT_HUB
-					Console.WriteLine($" Cached: {DeviceClients.Contains(receiveMessageHandlerConext.DeviceId)}");
 					Console.WriteLine($" MessageID: {message.MessageId}");
 					Console.WriteLine($" DeliveryCount: {message.DeliveryCount}");
 					Console.WriteLine($" EnqueuedTimeUtc: {message.EnqueuedTimeUtc}");
 					Console.WriteLine($" SequenceNumber: {message.SequenceNumber}");
 					Console.WriteLine($" To: {message.To}");
+               Console.WriteLine($" UserId: {message.UserId}");
+               Console.WriteLine($" ConnectionDeviceId: {message.CorrelationId}");
+               Console.WriteLine($" ConnectionModuleId: {message.ConnectionModuleId}");
+               Console.WriteLine($" ConnectionDeviceId: {message.ConnectionDeviceId}");
+               Console.WriteLine($" ComponentName: {message.ComponentName}");
 #endif
                string messageBody = Encoding.UTF8.GetString(message.GetBytes());
                Console.WriteLine($" Body: {messageBody}");
@@ -602,78 +613,49 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
 						Console.WriteLine($"   Key:{property.Key} Value:{property.Value}");
 					}
 #endif
-               if (!message.Properties.ContainsKey("Confirmed"))
+               // Put the one mandatory message property first, just because
+               if (!AzureMessagePortTryGet(message.Properties, out port))
                {
-                  Console.WriteLine(" UplinkMessageReceived missing confirmed property");
+                  Console.WriteLine();
+
+                  Console.WriteLine($" UplinkMessageReceived Port property is missing, invalid, and value must be between {Constants.PortNumberMinimum} and {Constants.PortNumberMaximum}");
+
                   await deviceClient.RejectAsync(message);
                   return;
                }
 
-               if (!bool.TryParse(message.Properties["Confirmed"], out confirmed))
+               if (!AzureMessageConfirmedTryGet(message.Properties, out confirmed))
                {
-                  Console.WriteLine(" UplinkMessageReceived confirmed property invalid");
+                  Console.WriteLine(" UplinkMessageReceived confirmed flag is invalid");
+
                   await deviceClient.RejectAsync(message);
                   return;
                }
 
-               if (!message.Properties.ContainsKey("Priority"))
+               if (!AzureMessagePriorityTryGet(message.Properties, out priority))
                {
-                  Console.WriteLine(" UplinkMessageReceived missing priority property");
+                  Console.WriteLine(" UplinkMessageReceived Priority value is invalid");
+
                   await deviceClient.RejectAsync(message);
                   return;
                }
 
-               string priorityPoperty = message.Properties["Priority"];
-
-               if (!Enum.TryParse(priorityPoperty, true, out priority) || !Enum.IsDefined(typeof(DownlinkPriority), priority))
+               if (!AzureMessageQueueTryGet(message.Properties, out queue))
                {
-                  Console.WriteLine(" UplinkMessageReceived priority property invalid");
+                  Console.WriteLine(" UplinkMessageReceived Queue value is invalid");
+
                   await deviceClient.RejectAsync(message);
                   return;
                }
 
-               if (!message.Properties.ContainsKey("Port"))
-               {
-                  Console.WriteLine(" UplinkMessageReceived missing port number property");
-                  await deviceClient.RejectAsync(message);
-                  return;
-               }
-
-               if (!byte.TryParse( message.Properties["Port"], out port))
-               {
-                  Console.WriteLine(" UplinkMessageReceived port number property invalid");
-                  await deviceClient.RejectAsync(message);
-                  return;
-               }
-
-               if ((port < Constants.PortNumberMinimum) || port > (Constants.PortNumberMaximum))
-               {
-                  Console.WriteLine($" UplinkMessageReceived port number {port} is invalid value must be between {Constants.PortNumberMinimum} and {Constants.PortNumberMaximum}");
-                  await deviceClient.RejectAsync(message);
-                  return;
-               }
-
-               if (!message.Properties.ContainsKey("Queue"))
-               {
-                  Console.WriteLine(" UplinkMessageReceived missing queue property");
-                  await deviceClient.RejectAsync(message);
-                  return;
-               }
-
-               string queueProperty = message.Properties["Queue"].ToLower();
-               switch (queueProperty)
-               {
-                  case "push":
-                     downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/push";
-                     break;
-                  case "replace":
-                     downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/replace";
-                     break;
-                  default:
-                     Console.WriteLine(" UplinkMessageReceived missing queue {queueProperty} property invalid value");
-                     await deviceClient.RejectAsync(message);
-                     return;
-               }
+               Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} Azure IoT Hub downlink message");
+               Console.WriteLine($" ApplicationID: {receiveMessageHandlerConext.ApplicationId}");
+               Console.WriteLine($" DeviceID: {receiveMessageHandlerConext.DeviceId}");
+               Console.WriteLine($" LockToken: {message.LockToken}");
+               Console.WriteLine($" Port: {port}");
+               Console.WriteLine($" Confirmed: {confirmed}");
+               Console.WriteLine($" Priority: {priority}");
+               Console.WriteLine($" queue: {queue}");
 
                DownlinkPayload Payload = new DownlinkPayload()
                {
@@ -693,6 +675,8 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
                   }
                };
 
+               string downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/{Enum.GetName( typeof(DownlinkQueue), queue)}".ToLower();
+
                var mqttMessage = new MqttApplicationMessageBuilder()
                                  .WithTopic(downlinktopic)
                                  .WithPayload(JsonConvert.SerializeObject(Payload))
@@ -700,8 +684,6 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
                                  .Build();
 
                await mqttClient.PublishAsync(mqttMessage);
-
-               Console.WriteLine();
             }
          }
          catch (Exception ex)
@@ -738,6 +720,80 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
          azureLockToken = correlationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
 
          azureLockToken = azureLockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
+
+         return true;
+      }
+
+      private static bool AzureMessagePortTryGet( IDictionary<string, string>properties, out byte port)
+      {
+         port = 0;
+
+         if (!properties.ContainsKey("Port"))
+         {
+            return false ;
+         }
+
+         if (!byte.TryParse(properties["Port"], out port))
+         {
+            return false;
+         }
+
+         if ((port < Constants.PortNumberMinimum) || port > (Constants.PortNumberMaximum))
+         {
+            return false;
+         }
+
+         return true;
+      }
+
+
+      private static bool AzureMessageConfirmedTryGet(IDictionary<string, string> properties, out bool confirmed)
+      {
+         confirmed = false;
+
+         if (!properties.ContainsKey("Confirmed"))
+         {
+            return true;
+         }
+
+         if (!bool.TryParse(properties["Confirmed"], out confirmed))
+         {
+            return false;
+         }
+
+         return true;
+      }
+
+      private static bool AzureMessagePriorityTryGet(IDictionary<string, string> properties, out DownlinkPriority priority)
+      {
+         priority =  DownlinkPriority.Normal;
+
+         if (!properties.ContainsKey("Priority"))
+         {
+            return true;
+         }
+
+         if (!Enum.TryParse(properties["Priority"], true, out priority) || !Enum.IsDefined(typeof(DownlinkPriority), priority))
+         {
+            return false;
+         }
+
+         return true;
+      }
+
+      private static bool AzureMessageQueueTryGet(IDictionary<string, string> properties, out DownlinkQueue queue)
+      {
+         queue = DownlinkQueue.Push;
+
+         if (!properties.ContainsKey("Queue"))
+         {
+            return true;
+         }
+
+         if (!Enum.TryParse(properties["Queue"], true, out queue) || !Enum.IsDefined(typeof(DownlinkQueue), queue))
+         {
+            return false;
+         }
 
          return true;
       }
