@@ -120,11 +120,13 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
                };
 
                // Retrieve list of devices page by page
+               int page = 1;
                V3EndDevices endDevices = await endDeviceRegistryClient.ListAsync(
                   options.ApiApplicationID,
                   field_mask_paths: Constants.DevicefieldMaskPaths,
+                  page: page,
                   limit: options.DevicePageSize);
-               if ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
+               while ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
                {
                   foreach (V3EndDevice endDevice in endDevices.End_devices)
                   {
@@ -175,6 +177,13 @@ namespace devMobile.TheThingsNetwork.TTNAPIApplicationToAzureIoTDeviceClient
                         Console.WriteLine($"Azure IoT Hub OpenAsync failed {ex.Message}");
                      }
                   }
+
+                  page += 1;
+                  endDevices = await endDeviceRegistryClient.ListAsync(
+                                    options.ApiApplicationID,
+                                    field_mask_paths: Constants.DevicefieldMaskPaths,
+                                    page: page,
+                                    limit: options.DevicePageSize);
                }
             }
 
