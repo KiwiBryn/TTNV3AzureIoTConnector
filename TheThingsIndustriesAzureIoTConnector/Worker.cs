@@ -13,25 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+//	AQIDBA== Base64 encoded payload: [0x01, 0x02, 0x03, 0x04]
+//
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 {
    using System;
    using System.Collections.Generic;
+   using System.Collections.Concurrent;
    using System.Net.Http;
    using System.Threading;
    using System.Threading.Tasks;
 
+   using Microsoft.Azure.Devices.Client;
    using Microsoft.Extensions.Hosting;
    using Microsoft.Extensions.Logging;
    using Microsoft.Extensions.Options;
 
    using devMobile.TheThingsNetwork.API;
+   using devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Models;
 
    public class Worker : BackgroundService
    {
       private readonly ILogger<Worker> _logger;
       private readonly ProgramSettings _programSettings;
+      private static readonly ConcurrentDictionary<string, DeviceClient> _deviceClients = new ConcurrentDictionary<string, DeviceClient>();
 
       public Worker(ILogger<Worker> logger, IOptions<ProgramSettings> programSettings)
       {
@@ -41,6 +47,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
       protected override async Task ExecuteAsync(CancellationToken stoppingToken)
       {
+         _logger.LogInformation("devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector starting");
+
          using (HttpClient httpClient = new HttpClient())
          {
             ApplicationRegistryClient applicationRegistryClient = new ApplicationRegistryClient(_programSettings.TheThingsIndustries.ApiBaseUrl, httpClient)
@@ -59,7 +67,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                   page: applicationPage,
                   cancellationToken: stoppingToken);
 
-               // Retrive a list of applications page by page
+               // Retrieve a list of applications page by page
                while ((applications != null) && (applications.Applications != null))
                {
                   _logger.LogInformation("Applications:{0} Page:{1} Page size:{2}", applications.Applications.Count, applicationPage, _programSettings.TheThingsIndustries.ApplicationPageSize);
@@ -128,35 +136,37 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                                     {
                                        _logger.LogInformation("Application:{0} Device:{1} Integrated", application.Ids.Application_id, endDevice.Ids.Device_id);
 
-                                       /*
                                        try
                                        {
                                           DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(
-                                             options.AzureIoTHubconnectionString,
+                                             _programSettings.AzureSettingsDefault.IoTHubConnectionString,
                                              endDevice.Ids.Device_id,
                                              TransportType.Amqp_Tcp_Only);
 
                                           await deviceClient.OpenAsync();
 
-                                          DeviceClients.Add(endDevice.Ids.Device_id, deviceClient, cacheItemPolicy);
+                                          if (!_deviceClients.TryAdd(endDevice.Ids.Device_id, deviceClient))
+                                          {
+                                             // Need to decide whether device cache add failure aborts startup
+                                             _logger.LogError("DeviceClient cache add failed");
+                                          }
 
                                           AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
                                           {
-                                             TenantId = options.Tenant,
+                                             TenantId = _programSettings.TheThingsIndustries.Tenant,
                                              DeviceId = endDevice.Ids.Device_id,
-                                             ApplicationId = options.ApiApplicationID,
+                                             ApplicationId = endDevice.Ids.Application_ids.Application_id,
                                           };
 
-                                          await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context);
+                                          await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context, stoppingToken);
 
-                                          await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context);
+                                          await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context, stoppingToken);
                                        }
                                        catch (Exception ex)
                                        {
-                                          Console.WriteLine();
-                                          Console.WriteLine($"Azure IoT Hub OpenAsync failed {ex.Message}");
+                                          // Need to decide whether device enumeration failure aborts startup
+                                          _logger.LogError(ex, "DeviceClient connection failed");
                                        }
-                                       */
                                     }
                                  }
                               }
@@ -194,10 +204,50 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
             }
          }
 
-         await Task.Delay(Timeout.Infinite, stoppingToken);
+         try
+         {
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+         }
+         catch(TaskCanceledException )
+         {
+            _logger.LogInformation("devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector stopping");
+         }
       }
 
-      bool ApplicationAzureEnabled(V3Application application)
+      private async Task<MethodResponse> AzureIoTHubClientDefaultMethodHandler(MethodRequest methodRequest, object userContext)
+      {
+         _logger.LogInformation("AzureIoTHubClientDefaultMethodHandler name: {0}", methodRequest.Name);
+
+         return new MethodResponse(200);
+      }
+
+      private async Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
+      {
+         DeviceClient device;
+
+         _logger.LogInformation("Message LockToken: {0}", message.LockToken);
+
+         AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
+         if (receiveMessageHandlerConext== null)
+         {
+            // Need to decide whether userContext extraction failure aborts operation
+            _logger.LogError("receiveMessageHandlerConext== null");
+
+            return;
+         }
+
+         if (!_deviceClients.TryGetValue(receiveMessageHandlerConext.DeviceId, out device))
+         {
+            // Need to decide whether device cache get failure aborts operation
+            _logger.LogError("DeviceClient cache get failed");
+
+            return;
+         }
+
+         await device.CompleteAsync(message.LockToken);
+      }
+
+      private bool ApplicationAzureEnabled(V3Application application)
       {
          bool integrated = _programSettings.TheThingsIndustries.ApplicationIntegrationDefault;
 
@@ -227,7 +277,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
          return integrated;
       }
 
-      bool DeviceAzureEnabled(V3Application application, V3EndDevice device)
+      private bool DeviceAzureEnabled(V3Application application, V3EndDevice device)
       {
          bool integrated = _programSettings.TheThingsIndustries.DeviceIntegrationDefault;
 
