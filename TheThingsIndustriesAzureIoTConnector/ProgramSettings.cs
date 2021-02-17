@@ -45,7 +45,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
    public class TheThingsIndustries
    {
       public string MqttServerName { get; set; }
-      public string MqttClientName { get; set; }
+      public string MqttClientId { get; set; }
+      public string MqttAccessKey { get; set; }
 
       public string Tenant { get; set; }
       public string Collaborator { get; set; }
