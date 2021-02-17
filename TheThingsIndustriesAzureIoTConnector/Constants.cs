@@ -23,17 +23,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
       public const byte PortNumberMinimum = 1;
       public const byte PortNumberMaximum = 223;
 
-#if APPLICATION_FIELDS_MINIMUM
-      public static readonly string[] ApplicationFieldMaskPaths = { "attributes" }; // think this is the bare minimum required for integration
-#else
-      public static readonly string[] ApplicationFieldMaskPaths = { "name", "description", "attributes" };
-#endif
+      public static readonly string[] ApplicationFieldMaskPaths = { "attributes" };
 
-#if DEVICE_FIELDS_MINIMUM
       public static readonly string[] DevicefieldMaskPaths = { "attributes" };
-#else
-      public static readonly string[] DevicefieldMaskPaths = { "name", "description", "attributes" };
-#endif
 
       public static string ApplicationAzureIntegrationProperty = "azureintegration";
 
