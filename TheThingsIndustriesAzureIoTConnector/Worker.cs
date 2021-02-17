@@ -70,19 +70,15 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                // Retrieve a list of applications page by page
                while ((applications != null) && (applications.Applications != null))
                {
-                  _logger.LogInformation("Applications:{0} Page:{1} Page size:{2}", applications.Applications.Count, applicationPage, _programSettings.TheThingsIndustries.ApplicationPageSize);
                   foreach (V3Application application in applications.Applications)
                   {
+                     _logger.LogInformation("Application:{0}", application.Ids.Application_id);
+
                      using (_logger.BeginScope("Application:{0} configuration", application.Ids.Application_id))
                      {
-#if APPLICATION_FIELDS_MINIMUM
-                        _logger.LogInformation("ID:{0}", application.Ids.Application_id);
-#else
-                        _logger.LogInformation("ID:{0} Name:{1} Description:{2} CreatedAt:{3} UpdatedAt:{4}", application.Ids.Application_id, application.Name, application.Description, application.Created_at, application.Updated_at);
-#endif
-                        if (_logger.IsEnabled(LogLevel.Information) && (application.Attributes != null))
+                        if (application.Attributes != null)
                         {
-                           using (_logger.BeginScope("Application {0} attribute configuration", application.Ids.Application_id))
+                           using (_logger.BeginScope("Application:{0} attribute configuration", application.Ids.Application_id))
                            {
                               foreach (KeyValuePair<string, string> attribute in application.Attributes)
                               {
@@ -94,7 +90,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
                      if (ApplicationAzureEnabled(application))
                      {
-                        _logger.LogInformation("Application:{0} Integrated", application.Ids.Application_id);
+                        _logger.LogInformation("Application:{0} Azure integrated", application.Ids.Application_id);
 
                         EndDeviceRegistryClient endDeviceRegistryClient = new EndDeviceRegistryClient(_programSettings.TheThingsIndustries.ApiBaseUrl, httpClient)
                         {
@@ -113,49 +109,49 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                               cancellationToken: stoppingToken);
                            while ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
                            {
-                              _logger.LogInformation("Application:{0} Devices:{1} Page:{2} Page size:{3}", application.Ids.Application_id, endDevices.End_devices.Count, devicePage, _programSettings.TheThingsIndustries.DevicePageSize);
-
-                              foreach (V3EndDevice endDevice in endDevices.End_devices)
+                              foreach (V3EndDevice device in endDevices.End_devices)
                               {
-                                 using (_logger.BeginScope("Application:{0} Device:{1} configuration", application.Ids.Application_id, endDevice.Ids.Device_id))
-                                 {
-                                    _logger.LogInformation("ID:{0} EUI:{1} Name:{2} Description:{3} CreatedAt:{4} UpdatedAt:{5}", endDevice.Ids.Device_id, BitConverter.ToString(endDevice.Ids.Dev_eui), endDevice.Name, endDevice.Description, endDevice.Created_at, endDevice.Updated_at);
+                                 _logger.LogInformation("Application:{0} Device:{1}", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
 
-                                    if (_logger.IsEnabled(LogLevel.Information) && (endDevice.Attributes != null))
+                                 using (_logger.BeginScope("Application:{0} Device:{1} configuration", device.Ids.Application_ids.Application_id, device.Ids.Device_id))
+                                 {
+                                    _logger.LogInformation("Device EUI:{0} Join EUI:{1}", BitConverter.ToString(device.Ids.Dev_eui), BitConverter.ToString(device.Ids.Join_eui));
+
+                                    if (device.Attributes != null)
                                     {
-                                       using (_logger.BeginScope("Enddevice {0} attribute configuration", application.Ids.Application_id))
+                                       using (_logger.BeginScope("Device:{0} attribute configuration", application.Ids.Application_id))
                                        {
-                                          foreach (KeyValuePair<string, string> attribute in endDevice.Attributes)
+                                          foreach (KeyValuePair<string, string> attribute in device.Attributes)
                                           {
                                              _logger.LogInformation("Key:{0} Value:{1}", attribute.Key, attribute.Value);
                                           }
                                        }
                                     }
 
-                                    if (DeviceAzureEnabled(application, endDevice))
+                                    if (DeviceAzureEnabled(application, device))
                                     {
-                                       _logger.LogInformation("Application:{0} Device:{1} Integrated", application.Ids.Application_id, endDevice.Ids.Device_id);
+                                       _logger.LogInformation("Application:{0} Device:{1} Integrated", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
 
                                        try
                                        {
                                           DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(
                                              _programSettings.AzureSettingsDefault.IoTHubConnectionString,
-                                             endDevice.Ids.Device_id,
+                                             device.Ids.Device_id,
                                              TransportType.Amqp_Tcp_Only);
 
                                           await deviceClient.OpenAsync();
 
-                                          if (!_deviceClients.TryAdd(endDevice.Ids.Device_id, deviceClient))
+                                          if (!_deviceClients.TryAdd(device.Ids.Device_id, deviceClient))
                                           {
                                              // Need to decide whether device cache add failure aborts startup
-                                             _logger.LogError("DeviceClient cache add failed");
+                                             _logger.LogError("DeviceClient cache Device:{0} add failed", device.Ids.Device_id);
                                           }
 
                                           AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
                                           {
                                              TenantId = _programSettings.TheThingsIndustries.Tenant,
-                                             DeviceId = endDevice.Ids.Device_id,
-                                             ApplicationId = endDevice.Ids.Application_ids.Application_id,
+                                             DeviceId = device.Ids.Device_id,
+                                             ApplicationId = device.Ids.Application_ids.Application_id,
                                           };
 
                                           await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context, stoppingToken);
@@ -212,6 +208,12 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
          {
             _logger.LogInformation("devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector stopping");
          }
+
+         foreach( var deviceClient in _deviceClients)
+         {
+            _logger.LogInformation("DeviceClient device{0} closing", deviceClient.Key);
+            await deviceClient.Value.CloseAsync();
+         }
       }
 
       private async Task<MethodResponse> AzureIoTHubClientDefaultMethodHandler(MethodRequest methodRequest, object userContext)
@@ -231,7 +233,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
          if (receiveMessageHandlerConext== null)
          {
             // Need to decide whether userContext extraction failure aborts operation
-            _logger.LogError("receiveMessageHandlerConext== null");
+            _logger.LogError("receiveMessageHandlerContext== null");
 
             return;
          }
@@ -253,26 +255,20 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
          if (application.Attributes == null)
          {
-            _logger.LogInformation("Application:{0} has no attributes", application.Ids.Application_id);
-
             return integrated;
          }
 
          if (!application.Attributes.ContainsKey(Constants.ApplicationAzureIntegrationProperty))
          {
-            _logger.LogInformation("Application:{0} Attribute:{1} missing", application.Ids.Application_id, Constants.ApplicationAzureIntegrationProperty);
-
             return integrated;
          }
 
-         if (!bool.TryParse(application.Attributes["azureintegration"], out integrated))
+         if (!bool.TryParse(application.Attributes[Constants.ApplicationAzureIntegrationProperty], out integrated))
          {
-            _logger.LogWarning("Application:{0} Azure Integration property:{1} value:{2} invalid", application.Ids.Application_id, Constants.ApplicationAzureIntegrationProperty, application.Attributes["azureintegration"]);
+            _logger.LogWarning("Application:{0} Azure Integration property:{1} value:{2} invalid", application.Ids.Application_id, Constants.ApplicationAzureIntegrationProperty, application.Attributes[Constants.ApplicationAzureIntegrationProperty]);
 
             return integrated;
          }
-
-         _logger.LogInformation("Application:{0} is Azure Integrated:{1} ", application.Ids.Application_id, integrated);
 
          return integrated;
       }
@@ -283,39 +279,29 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
          if (device.Attributes != null)
          {
-            _logger.LogInformation("Application:{0} has attributes", application.Ids.Application_id);
-
             if (application.Attributes.ContainsKey(Constants.DeviceAzureIntegrationProperty))
             {
                if (bool.TryParse(device.Attributes[Constants.DeviceAzureIntegrationProperty], out integrated))
                {
-                  _logger.LogInformation("Application:{0} Device:{1} is Azure Integrated:{1} device", application.Ids.Application_id, device.Ids.Device_id, integrated);
-
                   return integrated;
                }
 
-               _logger.LogWarning("Application:{0} Device {1} Azure Integration property:{2} value:{3} invalid", application.Ids.Application_id, device.Ids.Device_id, Constants.ApplicationAzureIntegrationProperty, application.Attributes[Constants.DeviceAzureIntegrationProperty]);
+               _logger.LogWarning("Application:{0} Device:{1} Azure Integration property:{2} value:{3} invalid", device.Ids.Application_ids.Application_id, device.Ids.Device_id, Constants.ApplicationAzureIntegrationProperty, application.Attributes[Constants.DeviceAzureIntegrationProperty]);
             }
          }
 
          if (application.Attributes != null)
          {
-            _logger.LogInformation("Application:{0} Device{1} has attributes", application.Ids.Application_id, device.Ids.Device_id);
-
             if (application.Attributes.ContainsKey(Constants.ApplicationDeviceAzureIntegrationProperty))
             {
                if (bool.TryParse(application.Attributes[Constants.ApplicationDeviceAzureIntegrationProperty], out integrated))
                {
-                  _logger.LogInformation("Application:{0} Device:{1} is Azure Integrated:{1} application", application.Ids.Application_id, device.Ids.Device_id, integrated);
-
                   return integrated;
                }
 
-               _logger.LogWarning("Application:{0} Device Azure Integration default property:{1} value:{2} invalid", application.Ids.Application_id, Constants.ApplicationAzureIntegrationProperty, application.Attributes[Constants.ApplicationDeviceAzureIntegrationProperty]);
+               _logger.LogWarning("Application:{0} Device:{1} Azure Integration default property:{2} value:{3} invalid", device.Ids.Application_ids.Application_id, device.Ids.Application_ids, Constants.ApplicationAzureIntegrationProperty, application.Attributes[Constants.ApplicationDeviceAzureIntegrationProperty]);
             }
          }
-
-         _logger.LogInformation("Application:{0} Device:{1} is Azure Integrated:{1} default", application.Ids.Application_id, device.Ids.Device_id, integrated);
 
          return integrated;
       }
