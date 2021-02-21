@@ -345,3 +345,5 @@ healthchecksdb
 /AzureWorkerService/appsettings.Development.json
 /AzureWorkerService/appsettings.Production.json
 *.json
+/AzureWorkerService/Settings.job
+/TheThingsIndustriesAzureIoTConnector/Settings.job

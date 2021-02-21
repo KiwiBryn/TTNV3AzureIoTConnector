@@ -17,4 +17,10 @@
   <ItemGroup>
     <ProjectReference Include="..\TTNAPIOpenAPIClient\TTNAPIOpenAPIClient.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Settings.job">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
