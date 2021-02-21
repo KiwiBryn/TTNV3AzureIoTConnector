@@ -28,12 +28,12 @@ namespace devMobile.TheThingsNetwork.WorkerService
    public class Worker : BackgroundService
    {
       private readonly ILogger<Worker> _logger;
-      private readonly ProgramSettings _applicationSettings;
+      private readonly ProgramSettings _programSettings;
 
       public Worker(ILogger<Worker> logger, IOptions<ProgramSettings> programSettings)
       {
          _logger = logger;
-         _applicationSettings = programSettings.Value;
+         _programSettings = programSettings.Value;
       }
 
       protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -47,35 +47,35 @@ namespace devMobile.TheThingsNetwork.WorkerService
 
             using (_logger.BeginScope("TheThingsIndustries configuration"))
             {
-               _logger.LogInformation("Tennant: {0}", _applicationSettings.TheThingsIndustries.Tennant);
-               _logger.LogInformation("ApiBaseUrl: {0}", _applicationSettings.TheThingsIndustries.ApiBaseUrl);
-               _logger.LogInformation("ApiKey: {0}", _applicationSettings.TheThingsIndustries.ApiKey);
+               _logger.LogInformation("Tennant: {0}", _programSettings.TheThingsIndustries.Tennant);
+               _logger.LogInformation("ApiBaseUrl: {0}", _programSettings.TheThingsIndustries.ApiBaseUrl);
+               _logger.LogInformation("ApiKey: {0}", _programSettings.TheThingsIndustries.ApiKey);
 
-               _logger.LogInformation("ApplicationPageSize: {0}", _applicationSettings.TheThingsIndustries.ApplicationPageSize);
-               _logger.LogInformation("DevicePageSize: {0}", _applicationSettings.TheThingsIndustries.DevicePageSize);
+               _logger.LogInformation("ApplicationPageSize: {0}", _programSettings.TheThingsIndustries.ApplicationPageSize);
+               _logger.LogInformation("DevicePageSize: {0}", _programSettings.TheThingsIndustries.DevicePageSize);
 
-               _logger.LogInformation("ApplicationIntegrationDefault: {0}", _applicationSettings.TheThingsIndustries.ApplicationIntegrationDefault);
-               _logger.LogInformation("DeviceIntegrationDefault: {0}", _applicationSettings.TheThingsIndustries.DeviceIntegrationDefault);
+               _logger.LogInformation("ApplicationIntegrationDefault: {0}", _programSettings.TheThingsIndustries.ApplicationIntegrationDefault);
+               _logger.LogInformation("DeviceIntegrationDefault: {0}", _programSettings.TheThingsIndustries.DeviceIntegrationDefault);
 
-               _logger.LogInformation("MQTTServerName: {0}", _applicationSettings.TheThingsIndustries.MqttServerName);
-               _logger.LogInformation("MQTTClientName: {0}", _applicationSettings.TheThingsIndustries.MqttClientName);
+               _logger.LogInformation("MQTTServerName: {0}", _programSettings.TheThingsIndustries.MqttServerName);
+               _logger.LogInformation("MQTTClientName: {0}", _programSettings.TheThingsIndustries.MqttClientName);
             }
 
             using (_logger.BeginScope("Azure default configuration"))
             {
-               if (_applicationSettings.AzureSettingsDefault.IoTHubConnectionString != null)
+               if (_programSettings.AzureSettingsDefault.IoTHubConnectionString != null)
                {
-                  _logger.LogInformation("AzureSettingsDefault.IoTHubConnectionString: {0}", _applicationSettings.AzureSettingsDefault.IoTHubConnectionString);
+                  _logger.LogInformation("AzureSettingsDefault.IoTHubConnectionString: {0}", _programSettings.AzureSettingsDefault.IoTHubConnectionString);
                }
 
-               if (_applicationSettings.AzureSettingsDefault.DeviceProvisioningServiceSettings != null)
+               if (_programSettings.AzureSettingsDefault.DeviceProvisioningServiceSettings != null)
                {
-                  _logger.LogInformation("AzureSettings.DeviceProvisioningServiceSettings.IdScope: {0}", _applicationSettings.AzureSettingsDefault.DeviceProvisioningServiceSettings.IdScope);
-                  _logger.LogInformation("AzureSettings.DeviceProvisioningServiceSettings.GroupEnrollmentKey: {0}", _applicationSettings.AzureSettingsDefault.DeviceProvisioningServiceSettings.GroupEnrollmentKey);
+                  _logger.LogInformation("AzureSettings.DeviceProvisioningServiceSettings.IdScope: {0}", _programSettings.AzureSettingsDefault.DeviceProvisioningServiceSettings.IdScope);
+                  _logger.LogInformation("AzureSettings.DeviceProvisioningServiceSettings.GroupEnrollmentKey: {0}", _programSettings.AzureSettingsDefault.DeviceProvisioningServiceSettings.GroupEnrollmentKey);
                }
             }
     
-            foreach (var application in _applicationSettings.Applications)
+            foreach (var application in _programSettings.Applications)
             {
                using (_logger.BeginScope(new[] { new KeyValuePair<string, object>("Application", application.Key)}))
                {

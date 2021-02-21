@@ -34,13 +34,14 @@ namespace devMobile.TheThingsNetwork.WorkerService
          Host.CreateDefaultBuilder(args)
          .ConfigureLogging(logging =>
          {
-            //logging.AddApplicationInsights();
+            logging.AddApplicationInsights();
             logging.ClearProviders();
             logging.AddConsole();
          })
          .ConfigureServices((hostContext, services) =>
          {
-            services.Configure<ProgramSettings>(hostContext.Configuration.GetSection("ProgramSettings"))
+            services.
+               Configure<ProgramSettings>(hostContext.Configuration.GetSection("ProgramSettings"))
                .AddHostedService<Worker>()
                .AddApplicationInsightsTelemetryWorkerService()
                .AddTransient<ProgramSettings>(a => a.GetRequiredService<IOptions<ProgramSettings>>().Value);
