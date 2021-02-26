@@ -36,8 +36,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
       public string MQTTAccessKey { get; set; }
 
-      public byte? ApplicationPageSize { get; set; }
-
       public bool? DeviceIntegrationDefault { get; set; }
       public byte? DevicePageSize { get; set; }
    }
@@ -46,15 +44,11 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
    {
       public string MqttServerName { get; set; }
       public string MqttClientId { get; set; }
-      public string MqttAccessKey { get; set; }
 
       public string Tenant { get; set; }
       public string Collaborator { get; set; }
       public string ApiBaseUrl { get; set; }
       public string ApiKey { get; set; }
-
-      public bool ApplicationIntegrationDefault { get; set; }
-      public byte ApplicationPageSize { get; set; }
 
       public bool DeviceIntegrationDefault { get; set; }
       public byte DevicePageSize { get; set; }
