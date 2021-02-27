@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-//	AQIDBA== Base64 encoded payload: [0x01, 0x02, 0x03, 0x04]
+// Base64 encoded payloads
+//	AQIDBA== 0x01, 0x02, 0x03, 0x04
+// BAMCAQ== 0x04, 0x03, 0x02, 0x01
 //
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
@@ -26,8 +28,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 	using System.Net.Http;
 	using System.Threading;
 	using System.Threading.Tasks;
-
+		
 	using Microsoft.Azure.Devices.Client;
+	using Microsoft.Azure.Devices.Client.Exceptions;
 	using Microsoft.Extensions.Hosting;
 	using Microsoft.Extensions.Logging;
 	using Microsoft.Extensions.Options;
@@ -69,26 +72,27 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 				foreach (KeyValuePair<string, ApplicationSetting> applicationSetting in _programSettings.Applications)
 				{
-					_logger.LogInformation("Enabled-ApplicationID:{0}", applicationSetting.Key);
+					_logger.LogInformation("Config-ApplicationID:{0}", applicationSetting.Key);
 
 					var mqttClient = mqttFactory.CreateManagedMqttClient();
 
 					var mqttClientoptions = new ManagedMqttClientOptionsBuilder()
-									.WithAutoReconnectDelay(TimeSpan.FromSeconds(5))
-									.WithClientOptions(new MqttClientOptionsBuilder()
+										.WithAutoReconnectDelay(TimeSpan.FromSeconds(5))
+										.WithClientOptions(new MqttClientOptionsBuilder()
 										.WithTcpServer(_programSettings.TheThingsIndustries.MqttServerName)
 										.WithCredentials(ApplicationIdGet(applicationSetting.Key), _programSettings.Applications[applicationSetting.Key].MQTTAccessKey)
 										.WithClientId(_programSettings.TheThingsIndustries.MqttClientId)
 										.WithTls()
 										.Build())
-									.Build();
+										.Build();
 
 					await mqttClient.StartAsync(mqttClientoptions);
 
 					if (!MqttClients.TryAdd(applicationSetting.Key, mqttClient))
 					{
 						// Need to decide whether device cache add failure aborts startup
-						_logger.LogError("Enabled-ApplicationID:{0} cache add failed", applicationSetting.Key);
+						_logger.LogError("Config-ApplicationID:{0} cache add failed", applicationSetting.Key);
+						continue;
 					}
 
 					using (HttpClient httpClient = new HttpClient())
@@ -99,67 +103,74 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 							ApiKey = _programSettings.TheThingsIndustries.ApiKey
 						};
 
-						int devicePage = 1;
-						V3EndDevices endDevices = await endDeviceRegistryClient.ListAsync(
-							applicationSetting.Key,
-							field_mask_paths: Constants.DevicefieldMaskPaths,
-							page: devicePage,
-							limit: _programSettings.TheThingsIndustries.DevicePageSize,
-							cancellationToken: stoppingToken);
-
-						while ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
+						try
 						{
-							foreach (V3EndDevice device in endDevices.End_devices)
-							{
-								if (DeviceAzureEnabled(device))
-								{
-									_logger.LogInformation("Enabled-ApplicationID:{0} DeviceID:{1} Device EUI:{2}", device.Ids.Application_ids.Application_id, device.Ids.Device_id, BitConverter.ToString(device.Ids.Dev_eui));
-
-									try
-									{
-										// This is here in preparation  for DPS which may have different IoT Hub connection strings due to load balancing/region based allocation 
-										if (!AzureConnectionStringGet(device.Ids.Application_ids.Application_id, out string connectionString))
-										{
-											// Need to decide whether device connection string retrive failed aborts startup
-											_logger.LogError("Enabled-Application:{0} Device:{1} connection string unknown", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
-										}
-
-										DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(connectionString, device.Ids.Device_id, TransportType.Amqp_Tcp_Only);
-
-										await deviceClient.OpenAsync(stoppingToken);
-
-										if (!DeviceClients.TryAdd(device.Ids.Device_id, deviceClient))
-										{
-											// Need to decide whether device cache add failure aborts startup
-											_logger.LogError("Enabled-Device:{0} cache add failed", device.Ids.Device_id);
-										}
-
-										AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
-										{
-											TenantId = _programSettings.TheThingsIndustries.Tenant,
-											DeviceId = device.Ids.Device_id,
-											ApplicationId = device.Ids.Application_ids.Application_id,
-										};
-
-										await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context, stoppingToken);
-
-										await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context, stoppingToken);
-									}
-									catch (Exception ex)
-									{
-										// Need to decide whether device enumeration failure aborts startup
-										_logger.LogError(ex, "Enabled-Device:{0} configuration failed", device.Ids.Device_id);
-									}
-								}
-							}
-
-							devicePage += 1;
-							endDevices = await endDeviceRegistryClient.ListAsync(
+							int devicePage = 1;
+							V3EndDevices endDevices = await endDeviceRegistryClient.ListAsync(
 								applicationSetting.Key,
 								field_mask_paths: Constants.DevicefieldMaskPaths,
 								page: devicePage,
 								limit: _programSettings.TheThingsIndustries.DevicePageSize,
 								cancellationToken: stoppingToken);
+
+							while ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
+							{
+								foreach (V3EndDevice device in endDevices.End_devices)
+								{
+									if (DeviceAzureEnabled(device))
+									{
+										_logger.LogInformation("Config-ApplicationID:{0} DeviceID:{1} Device EUI:{2}", device.Ids.Application_ids.Application_id, device.Ids.Device_id, BitConverter.ToString(device.Ids.Dev_eui));
+
+										try
+										{
+											// This is here in preparation  for DPS which may have different IoT Hub connection strings due to load balancing/region based allocation 
+											if (!AzureConnectionStringGet(device.Ids.Application_ids.Application_id, out string connectionString))
+											{
+												// Need to decide whether device connection string retrive failed aborts startup
+												_logger.LogError("Config-Application:{0} Device:{1} connection string unknown", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
+											}
+
+											DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(connectionString, device.Ids.Device_id, TransportType.Amqp_Tcp_Only);
+
+											await deviceClient.OpenAsync(stoppingToken);
+
+											if (!DeviceClients.TryAdd(device.Ids.Device_id, deviceClient))
+											{
+												// Need to decide whether device cache add failure aborts startup
+												_logger.LogError("Config-Device:{0} cache add failed", device.Ids.Device_id);
+											}
+
+											AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
+											{
+												TenantId = _programSettings.TheThingsIndustries.Tenant,
+												DeviceId = device.Ids.Device_id,
+												ApplicationId = device.Ids.Application_ids.Application_id,
+											};
+
+											await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context, stoppingToken);
+
+											await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context, stoppingToken);
+										}
+										catch (DeviceNotFoundException)
+										{
+											// Need to decide whether device connection failure aborts startup
+											_logger.LogWarning("Config-Azure Device:{0} configuration failed", device.Ids.Device_id);
+										}
+									}
+								}
+
+								devicePage += 1;
+								endDevices = await endDeviceRegistryClient.ListAsync(
+									applicationSetting.Key,
+									field_mask_paths: Constants.DevicefieldMaskPaths,
+									page: devicePage,
+									limit: _programSettings.TheThingsIndustries.DevicePageSize,
+									cancellationToken: stoppingToken);
+							}
+						}
+						catch (ApiException ex)
+						{
+							_logger.LogError( "Config-Application configuration API error:{0}", ex.StatusCode);
 						}
 
 						try
@@ -190,14 +201,14 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						}
 						catch (Exception ex)
 						{
-							_logger.LogError(ex, "Enabled-MQTT subscription error");
+							_logger.LogError(ex, "Config-MQTT subscription error");
 						}
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Enabled-Application configuration error");
+				_logger.LogError(ex, "Config-Application configuration error");
 
 				return;
 			}
@@ -302,9 +313,10 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					_logger.LogInformation("Downlink-DeviceID:{0} MessageID:{2} Port:{3} Confirmed:{4} Priority:{5} Queue:{6}",
+					_logger.LogInformation("Downlink-DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
 						receiveMessageHandlerConext.DeviceId,
 						message.MessageId,
+						message.LockToken,
 						port,
 						confirmed,
 						priority,
@@ -503,6 +515,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 				telemetryEvent.Add("ApplicationID", applicationId);
 				telemetryEvent.Add("DeviceID", deviceId);
 				telemetryEvent.Add("Port", port);
+				telemetryEvent.Add("Simulated", payload.Simulated);
+				telemetryEvent.Add("ReceivedAtUtc", payload.UplinkMessage.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
 				telemetryEvent.Add("PayloadRaw", payload.UplinkMessage.PayloadRaw);
 
 				// If the payload has been unpacked in TTN backend add fields to telemetry event payload
@@ -519,6 +533,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					ioTHubmessage.Properties.Add("ApplicationId", applicationId);
 					ioTHubmessage.Properties.Add("DeviceId", deviceId);
 					ioTHubmessage.Properties.Add("port", port.ToString());
+					ioTHubmessage.Properties.Add("Simulated", payload.Simulated.ToString());
 
 					await deviceClient.SendEventAsync(ioTHubmessage);
 				}
@@ -531,137 +546,173 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		private async Task DownlinkMessageQueued(MqttApplicationMessageReceivedEventArgs e)
 		{
-			DownlinkQueuedPayload payload = JsonConvert.DeserializeObject<DownlinkQueuedPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				_logger.LogWarning("Queued-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
-
-			if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
-			{
-				_logger.LogInformation("Queued-LockToken missing from payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
-
-			_logger.LogInformation("Queued-Device:{0} LockToken:{1} Confirmed:{2}", payload.EndDeviceIds.DeviceId, lockToken, payload.DownlinkQueued.Confirmed);
-
-			// The confirmation is done in the Ack/Nack/Failed message handler
-			if (payload.DownlinkQueued.Confirmed)
-			{
-				return;
-			}
-
-			if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
-			{
-				_logger.LogWarning("Queued-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
-				return;
-			}
-
 			try
 			{
-				await deviceClient.CompleteAsync(lockToken);
+				DownlinkQueuedPayload payload = JsonConvert.DeserializeObject<DownlinkQueuedPayload>(e.ApplicationMessage.ConvertPayloadToString());
+				if (payload == null)
+				{
+					_logger.LogError("Queued-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
+
+				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				{
+					_logger.LogWarning("Queued-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
+					return;
+				}
+
+				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				{
+					_logger.LogWarning("Queued-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
+
+				// The confirmation is done in the Ack/Nack/Failed message handler
+				if (payload.DownlinkQueued.Confirmed)
+				{
+					_logger.LogInformation("Queued-DeviceID:{0} confirmed LockToken:{1} ", payload.EndDeviceIds.DeviceId, lockToken);
+					return;
+				}
+
+				try
+				{
+					await deviceClient.CompleteAsync(lockToken);
+				}
+				catch (DeviceMessageLockLostException)
+				{
+					_logger.LogWarning("Queued-CompleteAsync DeviceID:{0} LockToken:{1} timeout", payload.EndDeviceIds.DeviceId, lockToken);
+					return;
+				}
+
+				_logger.LogInformation("Queued-DeviceID:{0} LockToken:{1} success", payload.EndDeviceIds.DeviceId, lockToken);
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Queued-CompleteAsync");
+				_logger.LogError(ex, "Queued-Processing error");
 			}
 		}
 
 		private async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
 		{
-			DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				_logger.LogWarning("Ack-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
-
-			if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
-			{
-				_logger.LogInformation("Ack-LockToken missing from payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
-			_logger.LogInformation("Ack-Device:{0} AzureLockToken:{1}", payload.EndDeviceIds.DeviceId, lockToken);
-
-			if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
-			{
-				_logger.LogWarning("Ack-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
-				return;
-			}
-
 			try
-			{
-				await deviceClient.CompleteAsync(lockToken);
+			{ 
+				DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
+				if (payload == null)
+				{
+					_logger.LogError("Ack-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
+
+				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				{
+					_logger.LogWarning("Ack-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
+					return;
+				}
+
+				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				{
+					_logger.LogWarning("Ack-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
+
+				try
+				{
+					await deviceClient.CompleteAsync(lockToken);
+				}
+				catch (DeviceMessageLockLostException)
+				{
+					_logger.LogWarning("Ack-CompleteAsync Device:{0} LockToken:{1} timeout", payload.EndDeviceIds.DeviceId, lockToken);
+					return;
+				}
+
+				_logger.LogInformation("Ack-Device:{0} LockToken:{1} success", payload.EndDeviceIds.DeviceId, lockToken);
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Ack-CompleteAsync");
+				_logger.LogError(ex, "Ack-Processing error");
 			}
 		}
 
 		private async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
 		{
-			DownlinkNackPayload payload = JsonConvert.DeserializeObject<DownlinkNackPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				_logger.LogWarning("Nack-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
+			try 
+			{ 
+				DownlinkNackPayload payload = JsonConvert.DeserializeObject<DownlinkNackPayload>(e.ApplicationMessage.ConvertPayloadToString());
+				if (payload == null)
+				{
+					_logger.LogError("Nack-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
 
-			if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
-			{
-				_logger.LogInformation("Nack-LockToken missing from payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
-			_logger.LogInformation("Nack-Device:{0} LockToken:{2}", payload.EndDeviceIds.DeviceId, lockToken);
+				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				{
+					_logger.LogWarning("Nack-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
+					return;
+				}
 
-			if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
-			{
-				_logger.LogWarning("Nack-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
-				return;
-			}
+				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				{
+					_logger.LogWarning("Nack-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
 
-			try
-			{
-				await deviceClient.AbandonAsync(lockToken);
+				try
+				{
+					await deviceClient.AbandonAsync(lockToken);
+				}
+				catch (DeviceMessageLockLostException)
+				{
+					_logger.LogWarning("Nack-AbandonAsync DeviceID:{0} LockToken:{1} timeout", payload.EndDeviceIds.DeviceId, lockToken);
+
+					return;
+				}
+
+				_logger.LogInformation("Nack-DeviceID:{0} LockToken:{1} success", payload.EndDeviceIds.DeviceId, lockToken);
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Nack-AbandonAsync");
+				_logger.LogError(ex, "Nack-Processing error");
 			}
 		}
 
 		private async Task DownlinkMessageFailed(MqttApplicationMessageReceivedEventArgs e)
 		{
-			DownlinkFailedPayload payload = JsonConvert.DeserializeObject<DownlinkFailedPayload>(e.ApplicationMessage.ConvertPayloadToString());
-			if (payload == null)
-			{
-				_logger.LogWarning("Failed-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
-
-			if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
-			{
-				_logger.LogInformation("Failed-LockToken missing from payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
-				return;
-			}
-			_logger.LogInformation("Failed-Device:{0} LockToken:{2}", payload.EndDeviceIds.DeviceId, lockToken);
-
-			if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
-			{
-				_logger.LogWarning("Failed-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
-				return;
-			}
-
 			try
 			{
-				await deviceClient.RejectAsync(lockToken);
+				DownlinkFailedPayload payload = JsonConvert.DeserializeObject<DownlinkFailedPayload>(e.ApplicationMessage.ConvertPayloadToString());
+				if (payload == null)
+				{
+					_logger.LogError("Failed-Invalid payload:{0}", e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
+
+				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				{
+					_logger.LogWarning("Failed-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
+					return;
+				}
+
+				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				{
+					_logger.LogWarning("Failed-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
+					return;
+				}
+
+				try
+				{
+					await deviceClient.RejectAsync(lockToken);
+				}
+				catch (DeviceMessageLockLostException)
+				{
+					_logger.LogWarning("Failed-RejectAsync DeviceID:{0} LockToken:{1} timeout", payload.EndDeviceIds.DeviceId, lockToken);
+					return;
+				}
+
+				_logger.LogInformation("Failed-Device{0} LockToken:{1} success", payload.EndDeviceIds.DeviceId, lockToken);
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Failed-RejectAsync");
-
+				_logger.LogError(ex, "Failed-Processing error");
 			}
 		}
 
