@@ -37,7 +37,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			{
 				logging.AddApplicationInsights();
 				logging.ClearProviders();
-				logging.AddConsole();
+				logging.AddSimpleConsole(c => c.TimestampFormat ="[HH:mm:ss]");
 			})
 				.ConfigureServices((hostContext, services) =>
 			{
