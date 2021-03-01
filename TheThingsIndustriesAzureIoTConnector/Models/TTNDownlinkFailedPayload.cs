@@ -26,12 +26,12 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Mod
       [JsonProperty("f_port")]
       public int f_port { get; set; }
 
-      [JsonProperty("f_port")]
+      [JsonProperty("f_payload")]
       public string frm_payload { get; set; }
 
       [JsonProperty("priority")]
       [JsonConverter(typeof(StringEnumConverter))]
-      public string priority { get; set; }
+      public DownlinkPriority priority { get; set; }
 
       [JsonProperty("correlation_ids")]
       public List<string> correlation_ids { get; set; }
