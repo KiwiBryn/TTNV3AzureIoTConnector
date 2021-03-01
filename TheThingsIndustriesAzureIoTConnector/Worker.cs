@@ -130,7 +130,18 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 												_logger.LogError("Config-Application:{0} Device:{1} connection string unknown", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
 											}
 
-											DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(connectionString, device.Ids.Device_id, TransportType.Amqp_Tcp_Only);
+											DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(connectionString, device.Ids.Device_id,
+												new ITransportSettings[]
+												{
+													new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
+													{
+														PrefetchCount = 0,
+														AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
+														{
+															Pooling = true,
+													}
+												}
+											});
 
 											await deviceClient.OpenAsync(stoppingToken);
 
