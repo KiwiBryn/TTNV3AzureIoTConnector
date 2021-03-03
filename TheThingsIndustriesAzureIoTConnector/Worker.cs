@@ -77,7 +77,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					var mqttClient = mqttFactory.CreateManagedMqttClient();
 
 					var mqttClientoptions = new ManagedMqttClientOptionsBuilder()
-										.WithAutoReconnectDelay(TimeSpan.FromSeconds(5))
+										.WithAutoReconnectDelay(_programSettings.TheThingsIndustries.MqttAutoReconnectDelay)
 										.WithClientOptions(new MqttClientOptionsBuilder()
 										.WithTcpServer(_programSettings.TheThingsIndustries.MqttServerName)
 										.WithCredentials(ApplicationIdGet(applicationSetting.Key), _programSettings.Applications[applicationSetting.Key].MQTTAccessKey)

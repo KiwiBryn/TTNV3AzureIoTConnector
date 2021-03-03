@@ -16,7 +16,8 @@
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 {
-   using System.Collections.Generic;
+	using System;
+	using System.Collections.Generic;
 
    public class AzureDeviceProvisiongServiceSettings
    {
@@ -44,6 +45,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
    {
       public string MqttServerName { get; set; }
       public string MqttClientId { get; set; }
+      public TimeSpan MqttAutoReconnectDelay { get; set; }
 
       public string Tenant { get; set; }
       public string Collaborator { get; set; }
