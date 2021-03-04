@@ -38,7 +38,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 	using MQTTnet;
 	using MQTTnet.Client;
 	using MQTTnet.Client.Options;
-	using MQTTnet.Client.Publishing;
 	using MQTTnet.Client.Receiving;
 	using MQTTnet.Extensions.ManagedClient;
 
@@ -80,7 +79,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 										.WithAutoReconnectDelay(_programSettings.TheThingsIndustries.MqttAutoReconnectDelay)
 										.WithClientOptions(new MqttClientOptionsBuilder()
 										.WithTcpServer(_programSettings.TheThingsIndustries.MqttServerName)
-										.WithCredentials(ApplicationIdGet(applicationSetting.Key), _programSettings.Applications[applicationSetting.Key].MQTTAccessKey)
+										.WithCredentials(_programSettings.ApplicationIdResolve(applicationSetting.Key), _programSettings.MqttAccessKeyResolve(applicationSetting.Key))
 										.WithClientId(_programSettings.TheThingsIndustries.MqttClientId)
 										.WithTls()
 										.Build())
@@ -124,7 +123,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 										try
 										{
 											// This is here in preparation  for DPS which may have different IoT Hub connection strings due to load balancing/region based allocation 
-											if (!AzureConnectionStringGet(device.Ids.Application_ids.Application_id, out string connectionString))
+											if (!_programSettings.AzureConnectionStringResolve(device.Ids.Application_ids.Application_id, out string connectionString))
 											{
 												// Need to decide whether device connection string retrive failed aborts startup
 												_logger.LogError("Config-Application:{0} Device:{1} connection string unknown", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
@@ -190,23 +189,23 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 							mqttClient.UseApplicationMessageReceivedHandler(new MqttApplicationMessageReceivedHandlerDelegate(e => MqttClientApplicationMessageReceived(e)));
 
 							// These may shift to individual device subscriptions
-							string uplinkTopic = $"v3/{ApplicationIdGet(applicationSetting.Key)}/devices/+/up";
+							string uplinkTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/up";
 							await mqttClient.SubscribeAsync(uplinkTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-							string queuedTopic = $"v3/{ApplicationIdGet(applicationSetting.Key)}/devices/+/down/queued";
+							string queuedTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/queued";
 							await mqttClient.SubscribeAsync(queuedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
 							// TODO : Sent topic currently not processed, see https://github.com/TheThingsNetwork/lorawan-stack/issues/76
-							//string sentTopic = $"v3/{ApplicationIdGet(applicationSetting.Key)}/devices/+/down/sent";
+							//string sentTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/sent";
 							//await mqttClient.SubscribeAsync(sentTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-							string ackTopic = $"v3/{ApplicationIdGet(applicationSetting.Key)}/devices/+/down/ack";
+							string ackTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/ack";
 							await mqttClient.SubscribeAsync(ackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-							string nackTopic = $"v3/{ApplicationIdGet(applicationSetting.Key)}/devices/+/down/nack";
+							string nackTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/nack";
 							await mqttClient.SubscribeAsync(nackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
-							string failedTopic = $"v3/{ApplicationIdGet(applicationSetting.Key)}/devices/+/down/failed";
+							string failedTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/failed";
 							await mqttClient.SubscribeAsync(failedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
 
 						}
@@ -255,11 +254,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		private async Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
 		{
-			bool confirmed;
-			byte port;
-			DownlinkPriority priority;
-			DownlinkQueue queue;
-
 			try
 			{
 				AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
@@ -272,27 +266,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 				using (message)
 				{
-#if DIAGNOSTICS_AZURE_IOT_HUB
-					_logger.LogInformation("MessageID: {0}", message.MessageId);
-					_logger.LogInformation("DeliveryCount: {0}", message.DeliveryCount);
-					_logger.LogInformation("EnqueuedTimeUtc: {0}", message.EnqueuedTimeUtc);
-					_logger.LogInformation("SequenceNumber: {0}", message.SequenceNumber);
-					_logger.LogInformation("To: {0}", message.To);
-					_logger.LogInformation("UserId {0}", message.UserId);
-					_logger.LogInformation("ConnectionDeviceId: {0}", message.ConnectionDeviceId);
-					_logger.LogInformation("ConnectionModuleId: {0}", message.ConnectionModuleId);
-					_logger.LogInformation("ConnectionDeviceId: {0}", message.ConnectionDeviceId);
-					_logger.LogInformation("ComponentName: 0}", message.ComponentName);
-#endif
 
-#if DOWNLINK_MESSAGE_PROPERTIES_DISPLAY
-					foreach (var property in message.Properties)
-					{
-						_logger.LogInformation("Key:{0} Value:{1}", property.Key, property.Value);
-					}
-#endif
 					// Put the one mandatory message property first, just because
-					if (!AzureMessagePortTryGet(message.Properties, out port))
+					if (!AzureMessagePortTryGet(message.Properties, out byte port))
 					{
 						_logger.LogWarning("Downlink-Port property is invalid");
 
@@ -300,7 +276,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					if (!AzureMessageConfirmedTryGet(message.Properties, out confirmed))
+					if (!AzureMessageConfirmedTryGet(message.Properties, out bool confirmed))
 					{
 						_logger.LogWarning("Downlink-Confirmed flag is invalid");
 
@@ -308,7 +284,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					if (!AzureMessagePriorityTryGet(message.Properties, out priority))
+					if (!AzureMessagePriorityTryGet(message.Properties, out DownlinkPriority priority))
 					{
 						_logger.LogWarning("Downlink-Priority value is invalid");
 
@@ -316,7 +292,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					if (!AzureMessageQueueTryGet(message.Properties, out queue))
+					if (!AzureMessageQueueTryGet(message.Properties, out DownlinkQueue queue))
 					{
 						_logger.LogWarning("Downlink-Queue value is invalid");
 
@@ -343,7 +319,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 								PayloadRaw = Encoding.UTF8.GetString(message.GetBytes()),
 								Priority = priority,
 								Port = port,
-								CorrelationIds = AzureLockTokenAdd(message.LockToken)
+								CorrelationIds = AzureLockTokenAdd(message.LockToken),
 							}
 						}
 					};
@@ -497,18 +473,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-#if DIAGNOSTICS_TTN_MQTT
-				if (payload.UplinkMessage.RXMetadata != null)
-				{
-					foreach (RxMetadata rxMetaData in payload.UplinkMessage.RXMetadata)
-					{
-						_logger.LogInformation("GatewayId {0}" , rxMetaData.GatewayIds.GatewayId);
-						_logger.LogInformation("ReceivedAtUTC {0}", rxMetaData.ReceivedAtUtc);
-						_logger.LogInformation("RSSI {0}", rxMetaData.Rssi);
-						_logger.LogInformation("Snr {0}", rxMetaData.Snr);
-					}
-				}
-#endif
 				string applicationId = payload.EndDeviceIds.ApplicationIds.ApplicationId;
 				string deviceId = payload.EndDeviceIds.DeviceId;
 				int port = payload.UplinkMessage.Port.Value;
@@ -823,41 +787,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			{
 				$"{Constants.AzureCorrelationPrefix}{azureLockToken}"
 			};
-		}
-
-		private bool AzureConnectionStringGet(string applicationId, out string connectionString)
-		{
-			connectionString = string.Empty;
-
-			if (_programSettings.Applications.ContainsKey(applicationId))
-			{
-				if (_programSettings.Applications[applicationId].AzureSettings != null)
-				{
-					if (!string.IsNullOrWhiteSpace(_programSettings.Applications[applicationId].AzureSettings.IoTHubConnectionString))
-					{
-						connectionString = _programSettings.Applications[applicationId].AzureSettings.IoTHubConnectionString;
-
-						return true;
-					}
-				}
-			}
-
-			if (_programSettings.AzureSettingsDefault != null)
-			{
-				if (!string.IsNullOrWhiteSpace(_programSettings.AzureSettingsDefault.IoTHubConnectionString))
-				{
-					connectionString = _programSettings.AzureSettingsDefault.IoTHubConnectionString;
-
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		private string ApplicationIdGet(string applicationId)
-		{
-			return $"{applicationId}@{_programSettings.TheThingsIndustries.Tenant}";
 		}
 	}
 }

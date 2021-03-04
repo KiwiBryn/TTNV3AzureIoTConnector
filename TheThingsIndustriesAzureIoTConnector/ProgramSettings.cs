@@ -16,8 +16,8 @@
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 {
-	using System;
-	using System.Collections.Generic;
+   using System;
+   using System.Collections.Generic;
 
    public class AzureDeviceProvisiongServiceSettings
    {
@@ -63,5 +63,52 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
       public AzureSettings AzureSettingsDefault { get; set; }
 
       public Dictionary<string, ApplicationSetting> Applications { get; set; }
+
+      public bool AzureConnectionStringResolve(string applicationId, out string connectionString)
+      {
+         connectionString = string.Empty;
+
+         if (this.Applications.ContainsKey(applicationId))
+         {
+            if (this.Applications[applicationId].AzureSettings != null)
+            {
+               if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.IoTHubConnectionString))
+               {
+                  connectionString = this.Applications[applicationId].AzureSettings.IoTHubConnectionString;
+
+                  return true;
+               }
+            }
+         }
+
+         if (this.AzureSettingsDefault != null)
+         {
+            if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.IoTHubConnectionString))
+            {
+               connectionString = this.AzureSettingsDefault.IoTHubConnectionString;
+
+               return true;
+            }
+         }
+
+         return false;
+      }
+
+      public string ApplicationIdResolve(string applicationId)
+      {
+         if (string.IsNullOrEmpty(this.TheThingsIndustries.Tenant))
+         {
+            return $"{applicationId}";
+         }
+         else
+         {
+            return $"{applicationId}@{this.TheThingsIndustries.Tenant}";
+         }
+      }
+
+      public string MqttAccessKeyResolve( string applicationId )
+      {
+         return this.Applications[applicationId].MQTTAccessKey;
+      }
    }
 }
