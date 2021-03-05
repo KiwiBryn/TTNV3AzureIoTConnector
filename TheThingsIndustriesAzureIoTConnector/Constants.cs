@@ -28,5 +28,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
       public static readonly string DeviceAzureIntegrationProperty = "azureintegration";
 
       public static readonly string AzureCorrelationPrefix = "az:LockToken:";
+
+      public static string AzureDpsGlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
    }
 }

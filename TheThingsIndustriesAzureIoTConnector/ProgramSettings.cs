@@ -16,99 +16,160 @@
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 {
-   using System;
-   using System.Collections.Generic;
+	using System;
+	using System.Collections.Generic;
 
-   public class AzureDeviceProvisiongServiceSettings
-   {
-      public string IdScope { get; set; }
-      public string GroupEnrollmentKey { get; set; }
-   }
+	public class AzureDeviceProvisiongServiceSettings
+	{
+		public string IdScope { get; set; }
+		public string GroupEnrollmentKey { get; set; }
+	}
 
-   public class AzureSettings
-   {
-      public string IoTHubConnectionString { get; set; }
-      public AzureDeviceProvisiongServiceSettings DeviceProvisioningServiceSettings { get; set; }
-   }
+	public class AzureSettings
+	{
+		public string IoTHubConnectionString { get; set; }
+		public AzureDeviceProvisiongServiceSettings DeviceProvisioningServiceSettings { get; set; }
+	}
 
-   public class ApplicationSetting
-   {
-      public AzureSettings AzureSettings { get; set; }
+	public class ApplicationSetting
+	{
+		public AzureSettings AzureSettings { get; set; }
 
-      public string MQTTAccessKey { get; set; }
+		public string MQTTAccessKey { get; set; }
 
-      public bool? DeviceIntegrationDefault { get; set; }
-      public byte? DevicePageSize { get; set; }
-   }
+		public bool? DeviceIntegrationDefault { get; set; }
+		public byte? DevicePageSize { get; set; }
+	}
 
-   public class TheThingsIndustries
-   {
-      public string MqttServerName { get; set; }
-      public string MqttClientId { get; set; }
-      public TimeSpan MqttAutoReconnectDelay { get; set; }
+	public class TheThingsIndustries
+	{
+		public string MqttServerName { get; set; }
+		public string MqttClientId { get; set; }
+		public TimeSpan MqttAutoReconnectDelay { get; set; }
 
-      public string Tenant { get; set; }
-      public string Collaborator { get; set; }
-      public string ApiBaseUrl { get; set; }
-      public string ApiKey { get; set; }
+		public string Tenant { get; set; }
+		public string Collaborator { get; set; }
+		public string ApiBaseUrl { get; set; }
+		public string ApiKey { get; set; }
 
-      public bool DeviceIntegrationDefault { get; set; }
-      public byte DevicePageSize { get; set; }
-   }
+		public bool DeviceIntegrationDefault { get; set; }
+		public byte DevicePageSize { get; set; }
+	}
 
-   public class ProgramSettings
-   {
-      public TheThingsIndustries TheThingsIndustries { get; set; }
+	public class ProgramSettings
+	{
+		public TheThingsIndustries TheThingsIndustries { get; set; }
 
-      public AzureSettings AzureSettingsDefault { get; set; }
+		public AzureSettings AzureSettingsDefault { get; set; }
 
-      public Dictionary<string, ApplicationSetting> Applications { get; set; }
+		public Dictionary<string, ApplicationSetting> Applications { get; set; }
 
-      public bool AzureConnectionStringResolve(string applicationId, out string connectionString)
-      {
-         connectionString = string.Empty;
+		public bool AzureConnectionStringResolve(string applicationId, out string connectionString)
+		{
+			connectionString = string.Empty;
 
-         if (this.Applications.ContainsKey(applicationId))
-         {
-            if (this.Applications[applicationId].AzureSettings != null)
-            {
-               if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.IoTHubConnectionString))
-               {
-                  connectionString = this.Applications[applicationId].AzureSettings.IoTHubConnectionString;
+			if (this.Applications.ContainsKey(applicationId))
+			{
+				if (this.Applications[applicationId].AzureSettings != null)
+				{
+					if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.IoTHubConnectionString))
+					{
+						connectionString = this.Applications[applicationId].AzureSettings.IoTHubConnectionString;
 
-                  return true;
-               }
-            }
-         }
+						return true;
+					}
+				}
+			}
 
-         if (this.AzureSettingsDefault != null)
-         {
-            if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.IoTHubConnectionString))
-            {
-               connectionString = this.AzureSettingsDefault.IoTHubConnectionString;
+			if (this.AzureSettingsDefault != null)
+			{
+				if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.IoTHubConnectionString))
+				{
+					connectionString = this.AzureSettingsDefault.IoTHubConnectionString;
 
-               return true;
-            }
-         }
+					return true;
+				}
+			}
 
-         return false;
-      }
+			return false;
+		}
 
-      public string ApplicationIdResolve(string applicationId)
-      {
-         if (string.IsNullOrEmpty(this.TheThingsIndustries.Tenant))
-         {
-            return $"{applicationId}";
-         }
-         else
-         {
-            return $"{applicationId}@{this.TheThingsIndustries.Tenant}";
-         }
-      }
+		public bool AzureDeviceProvisioningServiceIdScope(string applicationId, out string idScope)
+		{
+			idScope = string.Empty;
 
-      public string MqttAccessKeyResolve( string applicationId )
-      {
-         return this.Applications[applicationId].MQTTAccessKey;
-      }
-   }
+			if (this.Applications.ContainsKey(applicationId))
+			{
+				if ((this.Applications[applicationId].AzureSettings != null) && (this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings != null))
+				{
+					if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.IdScope))
+					{
+						idScope = this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.IdScope;
+
+						return true;
+					}
+				}
+			}
+
+			if ((this.AzureSettingsDefault != null) && (this.AzureSettingsDefault.DeviceProvisioningServiceSettings != null))
+			{
+				if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.DeviceProvisioningServiceSettings.IdScope))
+				{
+					idScope = this.AzureSettingsDefault.DeviceProvisioningServiceSettings.IdScope;
+
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		public bool AzureDeviceProvisioningServiceGroupEnrollmentKey(string applicationId, out string groupEnrollmentKey)
+		{
+			groupEnrollmentKey = string.Empty;
+
+			if (this.Applications.ContainsKey(applicationId))
+			{
+				if ((this.Applications[applicationId].AzureSettings != null) && (this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings != null))
+				{
+					if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.GroupEnrollmentKey))
+					{
+						groupEnrollmentKey = this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.GroupEnrollmentKey;
+
+						return true;
+					}
+				}
+			}
+
+			if ((this.AzureSettingsDefault != null) && (this.AzureSettingsDefault.DeviceProvisioningServiceSettings != null))
+			{
+				if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.DeviceProvisioningServiceSettings.GroupEnrollmentKey) )
+				{
+					groupEnrollmentKey = this.AzureSettingsDefault.IoTHubConnectionString;
+
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+
+		public string ApplicationIdResolve(string applicationId)
+		{
+			if (string.IsNullOrEmpty(this.TheThingsIndustries.Tenant))
+			{
+				return $"{applicationId}";
+			}
+			else
+			{
+				return $"{applicationId}@{this.TheThingsIndustries.Tenant}";
+			}
+		}
+
+		public string MqttAccessKeyResolve(string applicationId)
+		{
+			return this.Applications[applicationId].MQTTAccessKey;
+		}
+	}
 }

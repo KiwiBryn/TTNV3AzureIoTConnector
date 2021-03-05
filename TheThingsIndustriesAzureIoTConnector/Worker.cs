@@ -23,14 +23,19 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 	using System;
 	using System.Collections.Concurrent;
 	using System.Collections.Generic;
+	using System.Security.Cryptography;
 	using System.Globalization;
 	using System.Linq;
 	using System.Net.Http;
+	using System.Text;
 	using System.Threading;
 	using System.Threading.Tasks;
-		
+
 	using Microsoft.Azure.Devices.Client;
 	using Microsoft.Azure.Devices.Client.Exceptions;
+	using Microsoft.Azure.Devices.Provisioning.Client;
+	using Microsoft.Azure.Devices.Provisioning.Client.Transport;
+	using Microsoft.Azure.Devices.Shared;
 	using Microsoft.Extensions.Hosting;
 	using Microsoft.Extensions.Logging;
 	using Microsoft.Extensions.Options;
@@ -46,7 +51,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 	using devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Models;
 	using devMobile.TheThingsNetwork.API;
-	using System.Text;
 
 	public class Worker : BackgroundService
 	{
@@ -64,6 +68,12 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 		protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 		{
 			_logger.LogInformation("devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector starting");
+
+			if ((_programSettings.Applications == null) || (_programSettings.Applications.Count == 0))
+			{
+				_logger.LogError("TTI Applications configuration not found in appsettings file");
+				return;
+			}
 
 			try
 			{
@@ -122,25 +132,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 										try
 										{
-											// This is here in preparation  for DPS which may have different IoT Hub connection strings due to load balancing/region based allocation 
-											if (!_programSettings.AzureConnectionStringResolve(device.Ids.Application_ids.Application_id, out string connectionString))
-											{
-												// Need to decide whether device connection string retrive failed aborts startup
-												_logger.LogError("Config-Application:{0} Device:{1} connection string unknown", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
-											}
-
-											DeviceClient deviceClient = DeviceClient.CreateFromConnectionString(connectionString, device.Ids.Device_id,
-												new ITransportSettings[]
-												{
-													new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
-													{
-														PrefetchCount = 0,
-														AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
-														{
-															Pooling = true,
-													}
-												}
-											});
+											DeviceClient deviceClient = await DeviceRegistration(device.Ids.Application_ids.Application_id, device.Ids.Device_id);
 
 											await deviceClient.OpenAsync(stoppingToken);
 
@@ -161,10 +153,15 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 											await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context, stoppingToken);
 										}
+										catch(ApplicationException ex)
+										{
+											// Need to decide whether device connection failure aborts startup
+											_logger.LogWarning("Config-Application:{0} configuration failed:{1}", device.Ids.Application_ids.Application_id, ex.Message);
+										}
 										catch (DeviceNotFoundException)
 										{
 											// Need to decide whether device connection failure aborts startup
-											_logger.LogWarning("Config-Azure Device:{0} configuration failed", device.Ids.Device_id);
+											_logger.LogWarning("Config-Azure Device:{0} connection failed", device.Ids.Device_id);
 										}
 									}
 								}
@@ -180,7 +177,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						}
 						catch (ApiException ex)
 						{
-							_logger.LogError( "Config-Application configuration API error:{0}", ex.StatusCode);
+							_logger.LogError("Config-Application configuration API error:{0}", ex.StatusCode);
 						}
 
 						try
@@ -250,6 +247,79 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			_logger.LogInformation("AzureIoTHubClientDefaultMethodHandler name:{0}", methodRequest.Name);
 
 			return new MethodResponse(200);
+		}
+
+		private static async Task<DeviceClient> DeviceRegistration(string applicationId, string deviceId)
+		{
+			string deviceKey;
+
+			// See if AzureIoT hub connections string has been configured
+			if (_programSettings.AzureConnectionStringResolve(applicationId, out string connectionString))
+			{
+				return DeviceClient.CreateFromConnectionString(connectionString, deviceId,
+					new ITransportSettings[]
+						{
+							new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
+							{
+								PrefetchCount = 0,
+								AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
+								{
+									Pooling = true,
+								}
+							}
+						});
+			}
+
+			// See if Azure DPS has been configured
+			if (!_programSettings.AzureDeviceProvisioningServiceIdScope(applicationId, out string idScope))
+			{
+				throw new ApplicationException($"Application:{applicationId} IDScope configuration missing");
+			}
+
+			if (!_programSettings.AzureDeviceProvisioningServiceGroupEnrollmentKey(applicationId, out string groupEnrollmentKey))
+			{
+				throw new ApplicationException($"Application:{applicationId} Group enrolement key configuration missing");
+			}
+
+			using (var hmac = new HMACSHA256(Convert.FromBase64String(groupEnrollmentKey)))
+			{
+				deviceKey = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(deviceId)));
+			}
+
+			using (var securityProvider = new SecurityProviderSymmetricKey(deviceId, deviceKey, null))
+			{
+				using (var transport = new ProvisioningTransportHandlerAmqp(TransportFallbackType.TcpOnly))
+				{
+					ProvisioningDeviceClient provClient = ProvisioningDeviceClient.Create(
+						Constants.AzureDpsGlobalDeviceEndpoint,
+						idScope,
+						securityProvider,
+						transport);
+
+					DeviceRegistrationResult result = await provClient.RegisterAsync();
+					if (result.Status != ProvisioningRegistrationStatusType.Assigned)
+					{
+						throw new ApplicationException($"DevID:{deviceId} Status:{result.Status} RegisterAsync failed");
+					}
+
+					IAuthenticationMethod authentication = new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, (securityProvider as SecurityProviderSymmetricKey).GetPrimaryKey());
+
+					return DeviceClient.Create(result.AssignedHub,
+						authentication,
+						new ITransportSettings[]
+						{
+							new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
+							{
+								PrefetchCount = 0,
+								AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
+								{
+									Pooling = true,
+								}
+							}
+						}
+					);
+				}
+			}
 		}
 
 		private async Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
@@ -570,7 +640,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 		private async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
 		{
 			try
-			{ 
+			{
 				DownlinkAckPayload payload = JsonConvert.DeserializeObject<DownlinkAckPayload>(e.ApplicationMessage.ConvertPayloadToString());
 				if (payload == null)
 				{
@@ -610,8 +680,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		private async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
 		{
-			try 
-			{ 
+			try
+			{
 				DownlinkNackPayload payload = JsonConvert.DeserializeObject<DownlinkNackPayload>(e.ApplicationMessage.ConvertPayloadToString());
 				if (payload == null)
 				{
