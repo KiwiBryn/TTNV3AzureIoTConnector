@@ -251,10 +251,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		private static async Task<DeviceClient> DeviceRegistration(string applicationId, string deviceId)
 		{
-			string deviceKey;
-
 			// See if AzureIoT hub connections string has been configured
-			if (_programSettings.AzureConnectionStringResolve(applicationId, out string connectionString))
+			if (_programSettings.ConnectionStringResolve(applicationId, out string connectionString))
 			{
 				return DeviceClient.CreateFromConnectionString(connectionString, deviceId,
 					new ITransportSettings[]
@@ -270,56 +268,53 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						});
 			}
 
-			// See if Azure DPS has been configured
-			if (!_programSettings.AzureDeviceProvisioningServiceIdScope(applicationId, out string idScope))
+			// See if DPS has been configured
+			if (_programSettings.DeviceProvisioningServiceSettingsResolve(applicationId, out AzureDeviceProvisiongServiceSettings deviceProvisiongServiceSettings))
 			{
-				throw new ApplicationException($"Application:{applicationId} IDScope configuration missing");
-			}
+				string deviceKey;
 
-			if (!_programSettings.AzureDeviceProvisioningServiceGroupEnrollmentKey(applicationId, out string groupEnrollmentKey))
-			{
-				throw new ApplicationException($"Application:{applicationId} Group enrolement key configuration missing");
-			}
-
-			using (var hmac = new HMACSHA256(Convert.FromBase64String(groupEnrollmentKey)))
-			{
-				deviceKey = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(deviceId)));
-			}
-
-			using (var securityProvider = new SecurityProviderSymmetricKey(deviceId, deviceKey, null))
-			{
-				using (var transport = new ProvisioningTransportHandlerAmqp(TransportFallbackType.TcpOnly))
+				using (var hmac = new HMACSHA256(Convert.FromBase64String(deviceProvisiongServiceSettings.GroupEnrollmentKey)))
 				{
-					ProvisioningDeviceClient provClient = ProvisioningDeviceClient.Create(
-						Constants.AzureDpsGlobalDeviceEndpoint,
-						idScope,
-						securityProvider,
-						transport);
+					deviceKey = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(deviceId)));
+				}
 
-					DeviceRegistrationResult result = await provClient.RegisterAsync();
-					if (result.Status != ProvisioningRegistrationStatusType.Assigned)
+				using (var securityProvider = new SecurityProviderSymmetricKey(deviceId, deviceKey, null))
+				{
+					using (var transport = new ProvisioningTransportHandlerAmqp(TransportFallbackType.TcpOnly))
 					{
-						throw new ApplicationException($"DevID:{deviceId} Status:{result.Status} RegisterAsync failed");
-					}
+						ProvisioningDeviceClient provClient = ProvisioningDeviceClient.Create(
+							Constants.AzureDpsGlobalDeviceEndpoint,
+							deviceProvisiongServiceSettings.IdScope,
+							securityProvider,
+							transport);
 
-					IAuthenticationMethod authentication = new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, (securityProvider as SecurityProviderSymmetricKey).GetPrimaryKey());
-
-					return DeviceClient.Create(result.AssignedHub,
-						authentication,
-						new ITransportSettings[]
+						DeviceRegistrationResult result = await provClient.RegisterAsync();
+						if (result.Status != ProvisioningRegistrationStatusType.Assigned)
 						{
-							new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
+							throw new ApplicationException($"DevID:{deviceId} Status:{result.Status} RegisterAsync failed");
+						}
+
+						IAuthenticationMethod authentication = new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, (securityProvider as SecurityProviderSymmetricKey).GetPrimaryKey());
+
+						return DeviceClient.Create(result.AssignedHub,
+							authentication,
+							new ITransportSettings[]
 							{
-								PrefetchCount = 0,
-								AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
+								new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
 								{
-									Pooling = true,
+									PrefetchCount = 0,
+									AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
+									{
+										Pooling = true,
+									}
 								}
 							}
-						}
-					);
+						);
+					}
 				}
 			}
+
+			return null;
 		}
 
 		private async Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)

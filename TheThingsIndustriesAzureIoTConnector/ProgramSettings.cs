@@ -64,96 +64,97 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		public Dictionary<string, ApplicationSetting> Applications { get; set; }
 
-		public bool AzureConnectionStringResolve(string applicationId, out string connectionString)
+		public bool ConnectionStringResolve(string applicationId, out string connectionString)
 		{
 			connectionString = string.Empty;
 
-			if (this.Applications.ContainsKey(applicationId))
+			// First check application configuration exists
+			if (!this.Applications.ContainsKey(applicationId))
 			{
-				if (this.Applications[applicationId].AzureSettings != null)
-				{
-					if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.IoTHubConnectionString))
-					{
-						connectionString = this.Applications[applicationId].AzureSettings.IoTHubConnectionString;
-
-						return true;
-					}
-				}
+				return false;
 			}
 
-			if (this.AzureSettingsDefault != null)
+			// Then check Azure confguration exists
+			AzureSettings azureSettings = this.Applications[applicationId].AzureSettings;
+			if (azureSettings == null)
 			{
-				if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.IoTHubConnectionString))
-				{
-					connectionString = this.AzureSettingsDefault.IoTHubConnectionString;
+				return false;
+			}
 
-					return true;
-				}
+			connectionString = azureSettings.IoTHubConnectionString;
+
+			if (!string.IsNullOrWhiteSpace(connectionString))
+			{
+				return true;
+			}
+
+			if (this.AzureSettingsDefault == null)
+			{
+				return false;
+			}
+
+			connectionString = AzureSettingsDefault.IoTHubConnectionString;
+
+			if (!string.IsNullOrWhiteSpace(connectionString))
+			{
+				return true;
 			}
 
 			return false;
 		}
 
-		public bool AzureDeviceProvisioningServiceIdScope(string applicationId, out string idScope)
+		public bool DeviceProvisioningServiceSettingsResolve(string applicationId, out AzureDeviceProvisiongServiceSettings deviceProvisiongServiceSettings)
 		{
-			idScope = string.Empty;
+			deviceProvisiongServiceSettings = null;
 
-			if (this.Applications.ContainsKey(applicationId))
+			// First check application configuration exists
+			if (!this.Applications.ContainsKey(applicationId))
 			{
-				if ((this.Applications[applicationId].AzureSettings != null) && (this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings != null))
-				{
-					if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.IdScope))
-					{
-						idScope = this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.IdScope;
-
-						return true;
-					}
-				}
+				return false;
 			}
 
-			if ((this.AzureSettingsDefault != null) && (this.AzureSettingsDefault.DeviceProvisioningServiceSettings != null))
+			// Then check  Azure confguration exists
+			AzureSettings azureSettings = this.Applications[applicationId].AzureSettings;
+			if (azureSettings == null)
 			{
-				if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.DeviceProvisioningServiceSettings.IdScope))
-				{
-					idScope = this.AzureSettingsDefault.DeviceProvisioningServiceSettings.IdScope;
-
-					return true;
-				}
+				return false;
 			}
 
-			return false;
-		}
-
-		public bool AzureDeviceProvisioningServiceGroupEnrollmentKey(string applicationId, out string groupEnrollmentKey)
-		{
-			groupEnrollmentKey = string.Empty;
-
-			if (this.Applications.ContainsKey(applicationId))
+			// Then check DPS configuration exists
+			deviceProvisiongServiceSettings = azureSettings.DeviceProvisioningServiceSettings;
+			if (deviceProvisiongServiceSettings != null)
 			{
-				if ((this.Applications[applicationId].AzureSettings != null) && (this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings != null))
+				// Then check both the IDScope and GroupEnrollmentKey exist
+				if (string.IsNullOrWhiteSpace(deviceProvisiongServiceSettings.IdScope) || string.IsNullOrWhiteSpace(deviceProvisiongServiceSettings.GroupEnrollmentKey))
 				{
-					if (!string.IsNullOrWhiteSpace(this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.GroupEnrollmentKey))
-					{
-						groupEnrollmentKey = this.Applications[applicationId].AzureSettings.DeviceProvisioningServiceSettings.GroupEnrollmentKey;
-
-						return true;
-					}
+					return false;
 				}
+
+				return true;
 			}
 
-			if ((this.AzureSettingsDefault != null) && (this.AzureSettingsDefault.DeviceProvisioningServiceSettings != null))
+			// Then check the default settings
+			azureSettings = this.AzureSettingsDefault;
+			if (azureSettings == null)
 			{
-				if (!string.IsNullOrWhiteSpace(this.AzureSettingsDefault.DeviceProvisioningServiceSettings.GroupEnrollmentKey) )
-				{
-					groupEnrollmentKey = this.AzureSettingsDefault.IoTHubConnectionString;
+				return false;
+			}
 
-					return true;
+			// Then check the default DPS configuration exists
+			deviceProvisiongServiceSettings = azureSettings.DeviceProvisioningServiceSettings;
+			if (deviceProvisiongServiceSettings != null)
+			{
+				// Then check both the IDScope and GroupEnrollmentKey exist
+				if (string.IsNullOrWhiteSpace(deviceProvisiongServiceSettings.IdScope) || string.IsNullOrWhiteSpace(deviceProvisiongServiceSettings.GroupEnrollmentKey))
+				{
+					return false;
 				}
+
+				return true;
 			}
 
 			return false;
 		}
-
 
 		public string ApplicationIdResolve(string applicationId)
 		{
