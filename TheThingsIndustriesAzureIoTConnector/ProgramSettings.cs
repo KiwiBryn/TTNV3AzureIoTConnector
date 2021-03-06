@@ -60,8 +60,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 	{
 		public TheThingsIndustries TheThingsIndustries { get; set; }
 
-		public AzureSettings AzureSettingsDefault { get; set; }
-
 		public Dictionary<string, ApplicationSetting> Applications { get; set; }
 
 		public bool ConnectionStringResolve(string applicationId, out string connectionString)
@@ -82,18 +80,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 
 			connectionString = azureSettings.IoTHubConnectionString;
-
-			if (!string.IsNullOrWhiteSpace(connectionString))
-			{
-				return true;
-			}
-
-			if (this.AzureSettingsDefault == null)
-			{
-				return false;
-			}
-
-			connectionString = AzureSettingsDefault.IoTHubConnectionString;
 
 			if (!string.IsNullOrWhiteSpace(connectionString))
 			{
@@ -121,26 +107,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 
 			// Then check DPS configuration exists
-			deviceProvisiongServiceSettings = azureSettings.DeviceProvisioningServiceSettings;
-			if (deviceProvisiongServiceSettings != null)
-			{
-				// Then check both the IDScope and GroupEnrollmentKey exist
-				if (string.IsNullOrWhiteSpace(deviceProvisiongServiceSettings.IdScope) || string.IsNullOrWhiteSpace(deviceProvisiongServiceSettings.GroupEnrollmentKey))
-				{
-					return false;
-				}
-
-				return true;
-			}
-
-			// Then check the default settings
-			azureSettings = this.AzureSettingsDefault;
-			if (azureSettings == null)
-			{
-				return false;
-			}
-
-			// Then check the default DPS configuration exists
 			deviceProvisiongServiceSettings = azureSettings.DeviceProvisioningServiceSettings;
 			if (deviceProvisiongServiceSettings != null)
 			{
