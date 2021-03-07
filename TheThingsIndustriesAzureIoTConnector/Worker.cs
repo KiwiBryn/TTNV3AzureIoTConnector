@@ -328,7 +328,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 				{
 
 					// Put the one mandatory message property first, just because
-					if (!AzureMessagePortTryGet(message.Properties, out byte port))
+					if (!AzureDownlinkMessage.PortTryGet(message.Properties, out byte port))
 					{
 						_logger.LogWarning("Downlink-Port property is invalid");
 
@@ -336,7 +336,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					if (!AzureMessageConfirmedTryGet(message.Properties, out bool confirmed))
+					if (!AzureDownlinkMessage.ConfirmedTryGet(message.Properties, out bool confirmed))
 					{
 						_logger.LogWarning("Downlink-Confirmed flag is invalid");
 
@@ -344,7 +344,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					if (!AzureMessagePriorityTryGet(message.Properties, out DownlinkPriority priority))
+					if (!AzureDownlinkMessage.PriorityTryGet(message.Properties, out DownlinkPriority priority))
 					{
 						_logger.LogWarning("Downlink-Priority value is invalid");
 
@@ -352,7 +352,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					if (!AzureMessageQueueTryGet(message.Properties, out DownlinkQueue queue))
+					if (!AzureDownlinkMessage.QueueTryGet(message.Properties, out DownlinkQueue queue))
 					{
 						_logger.LogWarning("Downlink-Queue value is invalid");
 
@@ -417,79 +417,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			{
 				_logger.LogError(ex, "Downlink-Processing failed");
 			}
-		}
-
-		private bool AzureMessagePortTryGet(IDictionary<string, string> properties, out byte port)
-		{
-			port = 0;
-
-			if (!properties.ContainsKey("Port"))
-			{
-				return false;
-			}
-
-			if (!byte.TryParse(properties["Port"], out port))
-			{
-				return false;
-			}
-
-			if ((port < Constants.PortNumberMinimum) || port > (Constants.PortNumberMaximum))
-			{
-				return false;
-			}
-
-			return true;
-		}
-
-		private bool AzureMessageConfirmedTryGet(IDictionary<string, string> properties, out bool confirmed)
-		{
-			confirmed = false;
-
-			if (!properties.ContainsKey("Confirmed"))
-			{
-				return true;
-			}
-
-			if (!bool.TryParse(properties["Confirmed"], out confirmed))
-			{
-				return false;
-			}
-
-			return true;
-		}
-
-		private bool AzureMessagePriorityTryGet(IDictionary<string, string> properties, out DownlinkPriority priority)
-		{
-			priority = DownlinkPriority.Normal;
-
-			if (!properties.ContainsKey("Priority"))
-			{
-				return true;
-			}
-
-			if (!Enum.TryParse(properties["Priority"], true, out priority) || !Enum.IsDefined(typeof(DownlinkPriority), priority))
-			{
-				return false;
-			}
-
-			return true;
-		}
-
-		private bool AzureMessageQueueTryGet(IDictionary<string, string> properties, out DownlinkQueue queue)
-		{
-			queue = DownlinkQueue.Push;
-
-			if (!properties.ContainsKey("Queue"))
-			{
-				return true;
-			}
-
-			if (!Enum.TryParse(properties["Queue"], true, out queue) || !Enum.IsDefined(typeof(DownlinkQueue), queue))
-			{
-				return false;
-			}
-
-			return true;
 		}
 
 		private async void MqttClientApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs e)
