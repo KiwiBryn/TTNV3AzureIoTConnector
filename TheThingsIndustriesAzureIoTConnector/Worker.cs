@@ -17,6 +17,10 @@
 //	AQIDBA== 0x01, 0x02, 0x03, 0x04
 // BAMCAQ== 0x04, 0x03, 0x02, 0x01
 //
+// JSON Payloads
+// {"value_0": 0,"value_1": 1,"value_2": 2}
+// {"value_9": 9,"value_8": 1,"value_7": 7}
+//
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 {
