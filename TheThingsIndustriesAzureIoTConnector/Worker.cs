@@ -374,18 +374,30 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						priority,
 						queue);
 
+					Downlink downlink = new Downlink()
+					{
+						Confirmed = confirmed,
+						Priority = priority,
+						Port = port,
+						CorrelationIds = AzureLockTokenAdd(message.LockToken),
+					};
+
+					string payloadText = Encoding.UTF8.GetString(message.GetBytes());
+		
+					try
+					{
+						downlink.PayloadDecoded = JToken.Parse(payloadText) ;
+					}
+					catch(JsonReaderException)
+					{ 
+						downlink.PayloadRaw = payloadText;
+					}
+
 					DownlinkPayload Payload = new DownlinkPayload()
 					{
 						Downlinks = new List<Downlink>()
 						{
-							new Downlink()
-							{
-								Confirmed = confirmed,
-								PayloadRaw = Encoding.UTF8.GetString(message.GetBytes()),
-								Priority = priority,
-								Port = port,
-								CorrelationIds = AzureLockTokenAdd(message.LockToken),
-							}
+							downlink
 						}
 					};
 

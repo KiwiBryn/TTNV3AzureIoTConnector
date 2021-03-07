@@ -29,10 +29,10 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Mod
       [JsonProperty("f_port")]
       public int Port { get; set; }
 
-      [JsonProperty("frm_payload")]
+      [JsonProperty("frm_payload", NullValueHandling = NullValueHandling.Ignore)]
       public string PayloadRaw { get; set; }
 
-      [JsonProperty("decoded_payload")]
+      [JsonProperty("decoded_payload", NullValueHandling = NullValueHandling.Ignore)]
       public JToken PayloadDecoded { get; set; }
 
       [JsonProperty("confirmed")]
