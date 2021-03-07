@@ -104,6 +104,29 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						continue;
 					}
 
+					// Add subscriptions before just incase Azure messages queued ready to go...
+					mqttClient.UseApplicationMessageReceivedHandler(new MqttApplicationMessageReceivedHandlerDelegate(e => MqttClientApplicationMessageReceived(e)));
+
+					// These may shift to individual device subscriptions
+					string uplinkTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/up";
+					await mqttClient.SubscribeAsync(uplinkTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+
+					string queuedTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/queued";
+					await mqttClient.SubscribeAsync(queuedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+
+					// TODO : Sent topic currently not processed, see https://github.com/TheThingsNetwork/lorawan-stack/issues/76
+					//string sentTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/sent";
+					//await mqttClient.SubscribeAsync(sentTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+
+					string ackTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/ack";
+					await mqttClient.SubscribeAsync(ackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+
+					string nackTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/nack";
+					await mqttClient.SubscribeAsync(nackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+
+					string failedTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/failed";
+					await mqttClient.SubscribeAsync(failedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+
 					using (HttpClient httpClient = new HttpClient())
 					{
 						// Get ready to enumerate through the Application's devices
@@ -178,37 +201,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						catch (ApiException ex)
 						{
 							_logger.LogError("Config-Application configuration API error:{0}", ex.StatusCode);
-						}
-
-						try
-						{
-							// At this point all the AzureIoT Hub deviceClients setup and ready to go so can enable MQTT receive
-							mqttClient.UseApplicationMessageReceivedHandler(new MqttApplicationMessageReceivedHandlerDelegate(e => MqttClientApplicationMessageReceived(e)));
-
-							// These may shift to individual device subscriptions
-							string uplinkTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/up";
-							await mqttClient.SubscribeAsync(uplinkTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-
-							string queuedTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/queued";
-							await mqttClient.SubscribeAsync(queuedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-
-							// TODO : Sent topic currently not processed, see https://github.com/TheThingsNetwork/lorawan-stack/issues/76
-							//string sentTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/sent";
-							//await mqttClient.SubscribeAsync(sentTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-
-							string ackTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/ack";
-							await mqttClient.SubscribeAsync(ackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-
-							string nackTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/nack";
-							await mqttClient.SubscribeAsync(nackTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-
-							string failedTopic = $"v3/{_programSettings.ApplicationIdResolve(applicationSetting.Key)}/devices/+/down/failed";
-							await mqttClient.SubscribeAsync(failedTopic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-
-						}
-						catch (Exception ex)
-						{
-							_logger.LogError(ex, "Config-MQTT subscription error");
 						}
 					}
 				}
