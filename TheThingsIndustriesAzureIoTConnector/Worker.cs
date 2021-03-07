@@ -561,14 +561,15 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				JObject telemetryEvent = new JObject();
-
-				telemetryEvent.Add("ApplicationID", applicationId);
-				telemetryEvent.Add("DeviceID", deviceId);
-				telemetryEvent.Add("Port", port);
-				telemetryEvent.Add("Simulated", payload.Simulated);
-				telemetryEvent.Add("ReceivedAtUtc", payload.UplinkMessage.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture));
-				telemetryEvent.Add("PayloadRaw", payload.UplinkMessage.PayloadRaw);
+				JObject telemetryEvent = new JObject
+				{
+					{ "ApplicationID", applicationId },
+					{ "DeviceID", deviceId },
+					{ "Port", port },
+					{ "Simulated", payload.Simulated },
+					{ "ReceivedAtUtc", payload.UplinkMessage.ReceivedAtUtc.ToString("s", CultureInfo.InvariantCulture) },
+					{ "PayloadRaw", payload.UplinkMessage.PayloadRaw }
+				};
 
 				// If the payload has been unpacked in TTN backend add fields to telemetry event payload
 				if (payload.UplinkMessage.PayloadDecoded != null)

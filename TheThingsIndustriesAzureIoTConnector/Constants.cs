@@ -27,6 +27,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
       public static readonly string DeviceAzureIntegrationProperty = "azureintegration";
 
-      public static string AzureDpsGlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
+      public static readonly string AzureDpsGlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
    }
 }
