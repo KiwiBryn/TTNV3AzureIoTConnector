@@ -232,7 +232,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			foreach (var deviceClient in DeviceClients)
 			{
 				_logger.LogInformation("Close-DeviceClient:{0}", deviceClient.Key);
-				await deviceClient.Value.CloseAsync();
+				await deviceClient.Value.CloseAsync(CancellationToken.None);
 			}
 
 			foreach (var mqttClient in MqttClients)
@@ -378,7 +378,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						Confirmed = confirmed,
 						Priority = priority,
 						Port = port,
-						CorrelationIds = AzureLockTokenAdd(message.LockToken),
+						CorrelationIds = AzureLockToken.Add(message.LockToken),
 					};
 
 					string payloadText = Encoding.UTF8.GetString(message.GetBytes());
@@ -612,7 +612,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				if (!AzureLockToken.TryGet(payload.CorrelationIds, out string lockToken))
 				{
 					_logger.LogWarning("Queued-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
 					return;
@@ -660,7 +660,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				if (!AzureLockToken.TryGet(payload.CorrelationIds, out string lockToken))
 				{
 					_logger.LogWarning("Ack-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
 					return;
@@ -701,7 +701,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				if (!AzureLockToken.TryGet(payload.CorrelationIds, out string lockToken))
 				{
 					_logger.LogWarning("Nack-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
 					return;
@@ -743,7 +743,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!AzureLockTokenTryGet(payload.CorrelationIds, out string lockToken))
+				if (!AzureLockToken.TryGet(payload.CorrelationIds, out string lockToken))
 				{
 					_logger.LogWarning("Failed-DeviceID:{0} LockToken missing from payload:{1}", payload.EndDeviceIds.DeviceId, e.ApplicationMessage.ConvertPayloadToString());
 					return;
@@ -838,31 +838,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					EnumerateChildren(jobject, token2);
 				}
 			}
-		}
-
-		private bool AzureLockTokenTryGet(List<string> correlationIds, out string azureLockToken)
-		{
-			azureLockToken = string.Empty;
-
-			// if AzureCorrelationPrefix prefix not found bug out
-			if (!correlationIds.Any(o => o.StartsWith(Constants.AzureCorrelationPrefix)))
-			{
-				return false;
-			}
-
-			azureLockToken = correlationIds.Single(o => o.StartsWith(Constants.AzureCorrelationPrefix));
-
-			azureLockToken = azureLockToken.Remove(0, Constants.AzureCorrelationPrefix.Length);
-
-			return true;
-		}
-
-		private List<string> AzureLockTokenAdd(string azureLockToken)
-		{
-			return new List<string>()
-			{
-				$"{Constants.AzureCorrelationPrefix}{azureLockToken}"
-			};
 		}
 	}
 }
