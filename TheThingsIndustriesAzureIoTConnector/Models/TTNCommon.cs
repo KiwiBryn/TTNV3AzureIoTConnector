@@ -19,8 +19,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Mod
    using System.Runtime.Serialization;
 
    using Newtonsoft.Json;
+	using Newtonsoft.Json.Converters;
 
-   public class ApplicationIds
+	public class ApplicationIds
    {
       [JsonProperty("application_id")]
       public string ApplicationId { get; set; }
@@ -44,6 +45,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Mod
       public string DeviceAddress { get; set; }
    }
 
+   [JsonConverter(typeof(StringEnumConverter))]
    public enum DownlinkPriority
    {
       [EnumMember(Value = "LOWEST")]
@@ -62,6 +64,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Mod
       Highest,
    }
 
+   [JsonConverter(typeof(StringEnumConverter))]
    public enum DownlinkQueue
    {
       [EnumMember(Value = "push")]

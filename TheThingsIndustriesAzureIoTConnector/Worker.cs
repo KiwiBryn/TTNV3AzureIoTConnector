@@ -402,7 +402,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						return;
 					}
 
-					string downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/{Enum.GetName(typeof(DownlinkQueue), queue)}".ToLower();
+					string downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/{JsonConvert.SerializeObject(queue).Trim('"')}";
 
 					var mqttMessage = new MqttApplicationMessageBuilder()
 											.WithTopic(downlinktopic)
