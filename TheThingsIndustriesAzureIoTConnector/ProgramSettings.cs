@@ -19,6 +19,11 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 	using System;
 	using System.Collections.Generic;
 
+	using Newtonsoft.Json;
+	using Newtonsoft.Json.Converters;
+
+	using devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Models;
+
 	public class AzureDeviceProvisiongServiceSettings
 	{
 		public string IdScope { get; set; }
@@ -31,6 +36,18 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 		public AzureDeviceProvisiongServiceSettings DeviceProvisioningServiceSettings { get; set; }
 	}
 
+	public class MethodSetting
+	{
+		public byte Port { get; set; }
+
+		public bool Confirmed { get; set; }
+
+		[JsonConverter(typeof(StringEnumConverter))]
+		public DownlinkPriority priority { get; set; }
+
+		public DownlinkQueue queue { get; set; }
+	}
+
 	public class ApplicationSetting
 	{
 		public AzureSettings AzureSettings { get; set; }
@@ -39,6 +56,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		public bool? DeviceIntegrationDefault { get; set; }
 		public byte? DevicePageSize { get; set; }
+
+		public Dictionary<string, MethodSetting> MethodSettings { get; set; }
 	}
 
 	public class TheThingsIndustries
