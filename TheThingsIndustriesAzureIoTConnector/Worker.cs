@@ -174,13 +174,14 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 												TenantId = _programSettings.TheThingsIndustries.Tenant,
 												DeviceId = device.Ids.Device_id,
 												ApplicationId = device.Ids.Application_ids.Application_id,
+												MethodSettings = _programSettings.Applications[device.Ids.Application_ids.Application_id].MethodSettings,
 											};
 
 											await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context, stoppingToken);
 
 											await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context, stoppingToken);
 										}
-										catch(ApplicationException ex)
+										catch (ApplicationException ex)
 										{
 											// Need to decide whether device connection failure aborts startup
 											_logger.LogWarning("Config-Application:{0} configuration failed:{1}", device.Ids.Application_ids.Application_id, ex.Message);
@@ -324,68 +325,147 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
+				if (!MqttClients.TryGetValue(receiveMessageHandlerConext.ApplicationId, out IManagedMqttClient mqttClient))
+				{
+					_logger.LogWarning("Downlink-ApplicationID:{0} unknown", receiveMessageHandlerConext.ApplicationId);
+					return;
+				}
+
 				using (message)
 				{
+					DownlinkQueue queue;
+					Downlink downlink;
 
-					// Put the one mandatory message property first, just because
-					if (!AzureDownlinkMessage.PortTryGet(message.Properties, out byte port))
+					string payloadText = Encoding.UTF8.GetString(message.GetBytes()).Trim();
+
+					if (!message.Properties.ContainsKey("method-name"))
 					{
-						_logger.LogWarning("Downlink-Port property is invalid");
+						// Looks like it's Azure IoT hub message, Put the one mandatory message property first, just because
+						if (!AzureDownlinkMessage.PortTryGet(message.Properties, out byte port))
+						{
+							_logger.LogWarning("Downlink-Port property is invalid");
 
-						await deviceClient.RejectAsync(message);
-						return;
+							await deviceClient.RejectAsync(message);
+							return;
+						}
+
+						if (!AzureDownlinkMessage.ConfirmedTryGet(message.Properties, out bool confirmed))
+						{
+							_logger.LogWarning("Downlink-Confirmed flag is invalid");
+
+							await deviceClient.RejectAsync(message);
+							return;
+						}
+
+						if (!AzureDownlinkMessage.PriorityTryGet(message.Properties, out DownlinkPriority priority))
+						{
+							_logger.LogWarning("Downlink-Priority value is invalid");
+
+							await deviceClient.RejectAsync(message);
+							return;
+						}
+
+						if (!AzureDownlinkMessage.QueueTryGet(message.Properties, out queue))
+						{
+							_logger.LogWarning("Downlink-Queue value is invalid");
+
+							await deviceClient.RejectAsync(message);
+							return;
+						}
+
+						downlink = new Downlink()
+						{
+							Confirmed = confirmed,
+							Priority = priority,
+							Port = port,
+							CorrelationIds = AzureLockToken.Add(message.LockToken),
+						};
+
+						try
+						{
+							if (!payloadText.StartsWith("{") || !payloadText.StartsWith("["))
+							{
+								throw new JsonReaderException();
+							}
+
+							downlink.PayloadDecoded = JToken.Parse(payloadText);
+						}
+						catch (JsonReaderException)
+						{
+							downlink.PayloadRaw = payloadText;
+						}
+
+						_logger.LogInformation("Downlink-IoT Hub DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
+							receiveMessageHandlerConext.DeviceId,
+							message.MessageId,
+							message.LockToken,
+							downlink.Port,
+							downlink.Confirmed,
+							downlink.Priority,
+							queue);
 					}
-
-					if (!AzureDownlinkMessage.ConfirmedTryGet(message.Properties, out bool confirmed))
+					else
 					{
-						_logger.LogWarning("Downlink-Confirmed flag is invalid");
+						// Looks like Azure IoT Central
+						Console.WriteLine($"   Property method-name found");
 
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+						string methodName = message.Properties["method-name"];
+						if (string.IsNullOrWhiteSpace(methodName))
+						{
+							await deviceClient.RejectAsync(message);
+							Console.WriteLine($"   Property method-name null or white space");
+							return;
+						}
 
-					if (!AzureDownlinkMessage.PriorityTryGet(message.Properties, out DownlinkPriority priority))
-					{
-						_logger.LogWarning("Downlink-Priority value is invalid");
+						// Look up the method settings
+						if ( !receiveMessageHandlerConext.MethodSettings.TryGetValue(methodName, out MethodSetting methodSetting))
+						{
+							await deviceClient.RejectAsync(message);
+							Console.WriteLine($"   Property method-name has {methodName} wih no settings");
+							return;
+						}
 
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+						downlink = new Downlink()
+						{
+							Confirmed = methodSetting.Confirmed,
+							Priority = methodSetting.priority,
+							Port = methodSetting.Port,
+							CorrelationIds = AzureLockToken.Add(message.LockToken),
+						};
 
-					if (!AzureDownlinkMessage.QueueTryGet(message.Properties, out DownlinkQueue queue))
-					{
-						_logger.LogWarning("Downlink-Queue value is invalid");
+						queue = methodSetting.queue;
 
-						await deviceClient.RejectAsync(message);
-						return;
-					}
+						try
+						{
+							if (!payloadText.StartsWith("{") || !payloadText.StartsWith("["))
+							{
+								throw new JsonReaderException();
+							}
 
-					_logger.LogInformation("Downlink-DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
-						receiveMessageHandlerConext.DeviceId,
-						message.MessageId,
-						message.LockToken,
-						port,
-						confirmed,
-						priority,
-						queue);
+							downlink.PayloadDecoded= JToken.Parse(payloadText);
+						}
+						catch (JsonReaderException)
+						{
+							try
+							{
+								JToken value = JToken.Parse(payloadText);
 
-					Downlink downlink = new Downlink()
-					{
-						Confirmed = confirmed,
-						Priority = priority,
-						Port = port,
-						CorrelationIds = AzureLockToken.Add(message.LockToken),
-					};
+								downlink.PayloadDecoded = new JObject(new JProperty(methodName, value));
+							}
+							catch (JsonReaderException)
+							{
+								downlink.PayloadDecoded = new JObject(new JProperty(methodName, payloadText));
+							}
+						}
 
-					string payloadText = Encoding.UTF8.GetString(message.GetBytes());
-		
-					try
-					{
-						downlink.PayloadDecoded = JToken.Parse(payloadText) ;
-					}
-					catch(JsonReaderException)
-					{ 
-						downlink.PayloadRaw = payloadText;
+						_logger.LogInformation("Downlink-IoT Central DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
+							receiveMessageHandlerConext.DeviceId,
+							message.MessageId,
+							message.LockToken,
+							downlink.Port,
+							downlink.Confirmed,
+							downlink.Priority,
+							queue);
 					}
 
 					DownlinkPayload Payload = new DownlinkPayload()
@@ -396,26 +476,20 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						}
 					};
 
-					if (!MqttClients.TryGetValue(receiveMessageHandlerConext.ApplicationId, out IManagedMqttClient mqttClient))
-					{
-						_logger.LogWarning("Downlink-ApplicationID:{0} unknown", receiveMessageHandlerConext.ApplicationId);
-						return;
-					}
-
 					string downlinktopic = $"v3/{receiveMessageHandlerConext.ApplicationId}@{receiveMessageHandlerConext.TenantId}/devices/{receiveMessageHandlerConext.DeviceId}/down/{JsonConvert.SerializeObject(queue).Trim('"')}";
 
 					var mqttMessage = new MqttApplicationMessageBuilder()
-											.WithTopic(downlinktopic)
-											.WithPayload(JsonConvert.SerializeObject(Payload))
-											.WithAtLeastOnceQoS()
-											.Build();
+												.WithTopic(downlinktopic)
+												.WithPayload(JsonConvert.SerializeObject(Payload))
+												.WithAtLeastOnceQoS()
+												.Build();
 
 					await mqttClient.PublishAsync(mqttMessage);
 				}
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Downlink-Processing failed");
+				_logger.LogError(ex, "Downlink-ReceiveMessge processing failed");
 			}
 		}
 

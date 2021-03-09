@@ -16,10 +16,13 @@
 //---------------------------------------------------------------------------------
 namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector.Models
 {
+   using System.Collections.Generic;
+
    public class AzureIoTHubReceiveMessageHandlerContext
    {
       public string TenantId { get; set; }
       public string DeviceId { get; set; }
       public string ApplicationId { get; set; }
+      public Dictionary<string, MethodSetting> MethodSettings { get; set; }
    }
 }
