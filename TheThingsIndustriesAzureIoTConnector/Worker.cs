@@ -159,7 +159,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 										try
 										{
-											DeviceClient deviceClient = await DeviceRegistration(device.Ids.Application_ids.Application_id, device.Ids.Device_id);
+											DeviceClient deviceClient = await DeviceRegistration(device.Ids.Application_ids.Application_id, device.Ids.Device_id, stoppingToken);
 
 											await deviceClient.OpenAsync(stoppingToken);
 
@@ -246,7 +246,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			return new MethodResponse(404);
 		}
 
-		private static async Task<DeviceClient> DeviceRegistration(string applicationId, string deviceId)
+		private static async Task<DeviceClient> DeviceRegistration(string applicationId, string deviceId, CancellationToken stoppingToken)
 		{
 			ITransportSettings[] transportSettings = new ITransportSettings[]
 			{
@@ -285,7 +285,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 							securityProvider,
 							transport);
 
-						DeviceRegistrationResult result = await provClient.RegisterAsync();
+						DeviceRegistrationResult result = await provClient.RegisterAsync(stoppingToken);
 						if (result.Status != ProvisioningRegistrationStatusType.Assigned)
 						{
 							throw new ApplicationException($"DevID:{deviceId} Status:{result.Status} RegisterAsync failed");
