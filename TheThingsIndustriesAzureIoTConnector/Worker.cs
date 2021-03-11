@@ -248,20 +248,21 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		private static async Task<DeviceClient> DeviceRegistration(string applicationId, string deviceId)
 		{
+			ITransportSettings[] transportSettings = new ITransportSettings[]
+			{
+				new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
+				{
+					AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
+					{
+					Pooling = true,
+					}
+ 				}
+			};
+
 			// See if AzureIoT hub connections string has been configured
 			if (_programSettings.ConnectionStringResolve(applicationId, out string connectionString))
 			{
-				return DeviceClient.CreateFromConnectionString(connectionString, deviceId,
-					new ITransportSettings[]
-						{
-							new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
-							{
-								AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
-								{
-									Pooling = true,
-								}
-							}
-						});
+				return DeviceClient.CreateFromConnectionString(connectionString, deviceId, transportSettings);
 			}
 
 			// See if DPS has been configured
@@ -292,19 +293,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 						IAuthenticationMethod authentication = new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, (securityProvider as SecurityProviderSymmetricKey).GetPrimaryKey());
 
-						return DeviceClient.Create(result.AssignedHub,
-							authentication,
-							new ITransportSettings[]
-							{
-								new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
-								{
-									AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
-									{
-										Pooling = true,
-									}
- 								}
- 							}
-						);
+						return DeviceClient.Create(result.AssignedHub, authentication, transportSettings);
 					}
 				}
 			}
