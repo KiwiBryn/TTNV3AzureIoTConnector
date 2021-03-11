@@ -60,8 +60,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 	{
 		private static ILogger<Worker> _logger;
 		private static ProgramSettings _programSettings;
-		private static readonly ConcurrentDictionary<string, DeviceClient> DeviceClients = new ConcurrentDictionary<string, DeviceClient>();
-		private static readonly ConcurrentDictionary<string, IManagedMqttClient> MqttClients = new ConcurrentDictionary<string, IManagedMqttClient>();
+		private static readonly ConcurrentDictionary<string, DeviceClient> _DeviceClients = new ConcurrentDictionary<string, DeviceClient>();
+		private static readonly ConcurrentDictionary<string, IManagedMqttClient> _MqttClients = new ConcurrentDictionary<string, IManagedMqttClient>();
 
 		public Worker(ILogger<Worker> logger, IOptions<ProgramSettings> programSettings)
 		{
@@ -101,7 +101,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 					await mqttClient.StartAsync(mqttClientoptions);
 
-					if (!MqttClients.TryAdd(applicationSetting.Key, mqttClient))
+					if (!_MqttClients.TryAdd(applicationSetting.Key, mqttClient))
 					{
 						// Need to decide whether device cache add failure aborts startup
 						_logger.LogError("Config-ApplicationID:{0} cache add failed", applicationSetting.Key);
@@ -163,7 +163,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 											await deviceClient.OpenAsync(stoppingToken);
 
-											if (!DeviceClients.TryAdd(device.Ids.Device_id, deviceClient))
+											if (!_DeviceClients.TryAdd(device.Ids.Device_id, deviceClient))
 											{
 												// Need to decide whether device cache add failure aborts startup
 												_logger.LogError("Config-Device:{0} cache add failed", device.Ids.Device_id);
@@ -226,13 +226,13 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 				_logger.LogInformation("devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector stopping");
 			}
 
-			foreach (var deviceClient in DeviceClients)
+			foreach (var deviceClient in _DeviceClients)
 			{
 				_logger.LogInformation("Close-DeviceClient:{0}", deviceClient.Key);
 				await deviceClient.Value.CloseAsync(CancellationToken.None);
 			}
 
-			foreach (var mqttClient in MqttClients)
+			foreach (var mqttClient in _MqttClients)
 			{
 				_logger.LogInformation("Close- Application:{0}", mqttClient.Key);
 				await mqttClient.Value.StopAsync();
@@ -241,9 +241,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		private async static Task<MethodResponse> AzureIoTHubClientDefaultMethodHandler(MethodRequest methodRequest, object userContext)
 		{
-			_logger.LogInformation("AzureIoTHubClientDefaultMethodHandler name:{0}", methodRequest.Name);
+			_logger.LogWarning("AzureIoTHubClientDefaultMethodHandler name:{0} payload:{1)", methodRequest.Name, methodRequest.DataAsJson);
 
-			return new MethodResponse(200);
+			return new MethodResponse(404);
 		}
 
 		private static async Task<DeviceClient> DeviceRegistration(string applicationId, string deviceId)
@@ -319,13 +319,13 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			{
 				AzureIoTHubReceiveMessageHandlerContext receiveMessageHandlerConext = (AzureIoTHubReceiveMessageHandlerContext)userContext;
 
-				if (!DeviceClients.TryGetValue(receiveMessageHandlerConext.DeviceId, out DeviceClient deviceClient))
+				if (!_DeviceClients.TryGetValue(receiveMessageHandlerConext.DeviceId, out DeviceClient deviceClient))
 				{
 					_logger.LogWarning("Downlink-DeviceID:{0} unknown", receiveMessageHandlerConext.DeviceId);
 					return;
 				}
 
-				if (!MqttClients.TryGetValue(receiveMessageHandlerConext.ApplicationId, out IManagedMqttClient mqttClient))
+				if (!_MqttClients.TryGetValue(receiveMessageHandlerConext.ApplicationId, out IManagedMqttClient mqttClient))
 				{
 					_logger.LogWarning("Downlink-ApplicationID:{0} unknown", receiveMessageHandlerConext.ApplicationId);
 					return;
@@ -430,16 +430,18 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						downlink = new Downlink()
 						{
 							Confirmed = methodSetting.Confirmed,
-							Priority = methodSetting.priority,
+							Priority = methodSetting.Priority,
 							Port = methodSetting.Port,
 							CorrelationIds = AzureLockToken.Add(message.LockToken),
 						};
 
-						queue = methodSetting.queue;
+						queue = methodSetting.Queue;
 
 						try
 						{
-							if (!payloadText.StartsWith("{") || !payloadText.StartsWith("["))
+							if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
+															&&
+								(!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
 							{
 								throw new JsonReaderException();
 							}
@@ -554,7 +556,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 				_logger.LogInformation("Uplink-DeviceID:{0} Port:{1} Payload Raw:{2}", deviceId, port, payload.UplinkMessage.PayloadRaw);
 
-				if (!DeviceClients.TryGetValue(deviceId, out DeviceClient deviceClient))
+				if (!_DeviceClients.TryGetValue(deviceId, out DeviceClient deviceClient))
 				{
 					_logger.LogWarning("Uplink-Unkown DeviceID:{0}", deviceId);
 					return;
@@ -595,7 +597,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 		}
 
-		private async Task DownlinkMessageQueued(MqttApplicationMessageReceivedEventArgs e)
+		private static async Task DownlinkMessageQueued(MqttApplicationMessageReceivedEventArgs e)
 		{
 			try
 			{
@@ -606,7 +608,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				if (!_DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
 				{
 					_logger.LogWarning("Queued-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
 					return;
@@ -643,7 +645,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 		}
 
-		private async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
+		private static async Task DownlinkMessageAck(MqttApplicationMessageReceivedEventArgs e)
 		{
 			try
 			{
@@ -654,7 +656,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				if (!_DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
 				{
 					_logger.LogWarning("Ack-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
 					return;
@@ -684,7 +686,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 		}
 
-		private async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
+		private static async Task DownlinkMessageNack(MqttApplicationMessageReceivedEventArgs e)
 		{
 			try
 			{
@@ -695,7 +697,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				if (!_DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
 				{
 					_logger.LogWarning("Nack-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
 					return;
@@ -726,7 +728,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 		}
 
-		private async Task DownlinkMessageFailed(MqttApplicationMessageReceivedEventArgs e)
+		private static async Task DownlinkMessageFailed(MqttApplicationMessageReceivedEventArgs e)
 		{
 			try
 			{
@@ -737,7 +739,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					return;
 				}
 
-				if (!DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
+				if (!_DeviceClients.TryGetValue(payload.EndDeviceIds.DeviceId, out DeviceClient deviceClient))
 				{
 					_logger.LogWarning("Failed-DeviceID:{0} unknown", payload.EndDeviceIds.DeviceId);
 					return;
@@ -767,7 +769,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 		}
 
-		private bool DeviceAzureEnabled(V3EndDevice device)
+		private static bool DeviceAzureEnabled(V3EndDevice device)
 		{
 			bool integrated = _programSettings.TheThingsIndustries.DeviceIntegrationDefault;
 

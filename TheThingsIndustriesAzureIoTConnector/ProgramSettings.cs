@@ -43,9 +43,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 		public bool Confirmed { get; set; }
 
 		[JsonConverter(typeof(StringEnumConverter))]
-		public DownlinkPriority priority { get; set; }
+		public DownlinkPriority Priority { get; set; }
 
-		public DownlinkQueue queue { get; set; }
+		public DownlinkQueue Queue { get; set; }
 	}
 
 	public class ApplicationSetting
@@ -55,7 +55,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 		public string MQTTAccessKey { get; set; }
 
 		public bool? DeviceIntegrationDefault { get; set; }
-		public byte? DevicePageSize { get; set; }
 
 		public Dictionary<string, MethodSetting> MethodSettings { get; set; }
 	}
