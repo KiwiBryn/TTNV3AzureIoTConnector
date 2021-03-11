@@ -298,7 +298,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 							{
 								new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
 								{
-									PrefetchCount = 0,
 									AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
 									{
 										Pooling = true,
