@@ -303,8 +303,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 									{
 										Pooling = true,
 									}
-								}
-							}
+ 								}
+ 							}
 						);
 					}
 				}
@@ -383,7 +383,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 						try
 						{
-							if (!payloadText.StartsWith("{") || !payloadText.StartsWith("["))
+							if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
+																&&
+								(!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
 							{
 								throw new JsonReaderException();
 							}
