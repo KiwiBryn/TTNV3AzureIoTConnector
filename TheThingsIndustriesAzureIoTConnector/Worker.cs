@@ -29,7 +29,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 	using System.Collections.Generic;
 	using System.Security.Cryptography;
 	using System.Globalization;
-	using System.Linq;
 	using System.Net.Http;
 	using System.Text;
 	using System.Threading;
@@ -157,48 +156,17 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 									{
 										_logger.LogInformation("Config-ApplicationID:{0} DeviceID:{1} Device EUI:{2}", device.Ids.Application_ids.Application_id, device.Ids.Device_id, BitConverter.ToString(device.Ids.Dev_eui));
 
-										try
+										if (!await DeviceRegistration(device.Ids.Application_ids.Application_id, device.Ids.Device_id, stoppingToken))
 										{
-											DeviceClient deviceClient = await DeviceRegistration(device.Ids.Application_ids.Application_id, device.Ids.Device_id, stoppingToken);
-
-											await deviceClient.OpenAsync(stoppingToken);
-
-											if (!_DeviceClients.TryAdd(device.Ids.Device_id, deviceClient))
-											{
-												// Need to decide whether device cache add failure aborts startup
-												_logger.LogError("Config-Device:{0} cache add failed", device.Ids.Device_id);
-											}
-
-											AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
-											{
-												TenantId = _programSettings.TheThingsIndustries.Tenant,
-												DeviceId = device.Ids.Device_id,
-												ApplicationId = device.Ids.Application_ids.Application_id,
-												MethodSettings = _programSettings.Applications[device.Ids.Application_ids.Application_id].MethodSettings,
-											};
-
-											await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context, stoppingToken);
-
-											await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context, stoppingToken);
-										}
-										catch (ApplicationException ex)
-										{
-											// Need to decide whether device connection failure aborts startup
-											_logger.LogWarning("Config-Application:{0} configuration failed:{1}", device.Ids.Application_ids.Application_id, ex.Message);
-										}
-										catch (DeviceNotFoundException)
-										{
-											// Need to decide whether device connection failure aborts startup
-											_logger.LogWarning("Config-Azure Device:{0} connection failed", device.Ids.Device_id);
+											// TODO : work out if device registration failure aborts startup
+											_logger.LogWarning("Config-Application:{0}", device.Ids.Application_ids.Application_id);
 										}
 									}
 								}
-
-								devicePage += 1;
 								endDevices = await endDeviceRegistryClient.ListAsync(
 									applicationSetting.Key,
 									field_mask_paths: Constants.DevicefieldMaskPaths,
-									page: devicePage,
+									page: devicePage += 1,
 									limit: _programSettings.TheThingsIndustries.DevicePageSize,
 									cancellationToken: stoppingToken);
 							}
@@ -226,16 +194,25 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 				_logger.LogInformation("devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector stopping");
 			}
 
-			foreach (var deviceClient in _DeviceClients)
+			try
 			{
-				_logger.LogInformation("Close-DeviceClient:{0}", deviceClient.Key);
-				await deviceClient.Value.CloseAsync(CancellationToken.None);
-			}
+				foreach (var deviceClient in _DeviceClients)
+				{
+					_logger.LogInformation("Close-DeviceID:{0}", deviceClient.Key);
+					await deviceClient.Value.CloseAsync(CancellationToken.None);
+				}
 
-			foreach (var mqttClient in _MqttClients)
+				foreach (var mqttClient in _MqttClients)
+				{
+					_logger.LogInformation("Close-ApplicationID:{0}", mqttClient.Key);
+					await mqttClient.Value.StopAsync();
+				}
+			}
+			catch (Exception ex)
 			{
-				_logger.LogInformation("Close- Application:{0}", mqttClient.Key);
-				await mqttClient.Value.StopAsync();
+				_logger.LogError(ex, "devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector shutdown error");
+
+				return;
 			}
 		}
 
@@ -246,62 +223,102 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			return new MethodResponse(404);
 		}
 
-		private static async Task<DeviceClient> DeviceRegistration(string applicationId, string deviceId, CancellationToken stoppingToken)
+		private static async Task<bool> DeviceRegistration(string applicationId, string deviceId, CancellationToken stoppingToken)
 		{
+			DeviceClient deviceClient = null;
 			ITransportSettings[] transportSettings = new ITransportSettings[]
 			{
 				new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
 				{
 					AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
 					{
-					Pooling = true,
+						Pooling = true,
 					}
  				}
 			};
 
-			// See if AzureIoT hub connections string has been configured
-			if (_programSettings.ConnectionStringResolve(applicationId, out string connectionString))
-			{
-				return DeviceClient.CreateFromConnectionString(connectionString, deviceId, transportSettings);
-			}
-
-			// See if DPS has been configured
-			if (_programSettings.DeviceProvisioningServiceSettingsResolve(applicationId, out AzureDeviceProvisiongServiceSettings deviceProvisiongServiceSettings))
-			{
-				string deviceKey;
-
-				using (var hmac = new HMACSHA256(Convert.FromBase64String(deviceProvisiongServiceSettings.GroupEnrollmentKey)))
+			try 
+			{ 
+				// See if AzureIoT hub connections string has been configured
+				if (_programSettings.ConnectionStringResolve(applicationId, out string connectionString))
 				{
-					deviceKey = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(deviceId)));
+					deviceClient = DeviceClient.CreateFromConnectionString(connectionString, deviceId, transportSettings);
 				}
 
-				using (var securityProvider = new SecurityProviderSymmetricKey(deviceId, deviceKey, null))
+				// See if DPS has been configured
+				if (_programSettings.DeviceProvisioningServiceSettingsResolve(applicationId, out AzureDeviceProvisiongServiceSettings deviceProvisiongServiceSettings))
 				{
-					using (var transport = new ProvisioningTransportHandlerAmqp(TransportFallbackType.TcpOnly))
+					string deviceKey;
+
+					using (var hmac = new HMACSHA256(Convert.FromBase64String(deviceProvisiongServiceSettings.GroupEnrollmentKey)))
 					{
-						ProvisioningDeviceClient provClient = ProvisioningDeviceClient.Create(
-							Constants.AzureDpsGlobalDeviceEndpoint,
-							deviceProvisiongServiceSettings.IdScope,
-							securityProvider,
-							transport);
+						deviceKey = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(deviceId)));
+					}
 
-						DeviceRegistrationResult result = await provClient.RegisterAsync(stoppingToken);
-						if (result.Status != ProvisioningRegistrationStatusType.Assigned)
+					using (var securityProvider = new SecurityProviderSymmetricKey(deviceId, deviceKey, null))
+					{
+						using (var transport = new ProvisioningTransportHandlerAmqp(TransportFallbackType.TcpOnly))
 						{
-							throw new ApplicationException($"DevID:{deviceId} Status:{result.Status} RegisterAsync failed");
+							ProvisioningDeviceClient provClient = ProvisioningDeviceClient.Create(
+								Constants.AzureDpsGlobalDeviceEndpoint,
+								deviceProvisiongServiceSettings.IdScope,
+								securityProvider,
+								transport);
+
+							DeviceRegistrationResult result = await provClient.RegisterAsync(stoppingToken);
+							if (result.Status != ProvisioningRegistrationStatusType.Assigned)
+							{
+								_logger.LogError("Config-DeviceID:{0} Status:{1} RegisterAsyc failed ", deviceId, result.Status);
+
+								return false;
+							}
+
+							IAuthenticationMethod authentication = new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, (securityProvider as SecurityProviderSymmetricKey).GetPrimaryKey());
+
+							deviceClient = DeviceClient.Create(result.AssignedHub, authentication, transportSettings);
 						}
-
-						IAuthenticationMethod authentication = new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, (securityProvider as SecurityProviderSymmetricKey).GetPrimaryKey());
-
-						return DeviceClient.Create(result.AssignedHub, authentication, transportSettings);
 					}
 				}
+
+				await deviceClient.OpenAsync(stoppingToken);
+
+				if (!_DeviceClients.TryAdd(deviceId, deviceClient))
+				{
+					// Need to decide whether device cache add failure aborts startup
+					_logger.LogError("Config-Device:{0} cache add failed", deviceId);
+
+					return false;
+				}
+
+				AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
+				{
+					TenantId = _programSettings.TheThingsIndustries.Tenant,
+					DeviceId = deviceId,
+					ApplicationId = applicationId,
+					MethodSettings = _programSettings.Applications[applicationId].MethodSettings,
+				};
+
+				await deviceClient.SetReceiveMessageHandlerAsync(AzureIoTHubClientReceiveMessageHandler, context, stoppingToken);
+
+				await deviceClient.SetMethodDefaultHandlerAsync(AzureIoTHubClientDefaultMethodHandler, context, stoppingToken);
+			}
+			catch (DeviceNotFoundException)
+			{
+				_logger.LogWarning("Config-Azure Device:{0} device not found connection failed", deviceId);
+
+				return false;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Config-Azure Device:{0} connection failed", deviceId);
+
+				return false;
 			}
 
-			return null;
+			return true;
 		}
 
-		private async Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
+		private async static Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
 		{
 			try
 			{
@@ -397,21 +414,21 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					else
 					{
 						// Looks like Azure IoT Central
-						Console.WriteLine($"   Property method-name found");
-
 						string methodName = message.Properties["method-name"];
 						if (string.IsNullOrWhiteSpace(methodName))
 						{
+							_logger.LogWarning("Downlink-DeviceID:{0} MessagedID:{1} method-name property empty", receiveMessageHandlerConext.DeviceId, message.MessageId);
+
 							await deviceClient.RejectAsync(message);
-							Console.WriteLine($"   Property method-name null or white space");
 							return;
 						}
 
 						// Look up the method settings
 						if ( !receiveMessageHandlerConext.MethodSettings.TryGetValue(methodName, out MethodSetting methodSetting))
 						{
+							_logger.LogWarning("Downlink-DeviceID:{0} MessagedID:{1} method-name:{2} has no settings", receiveMessageHandlerConext.DeviceId, message.MessageId, methodName);
+
 							await deviceClient.RejectAsync(message);
-							Console.WriteLine($"   Property method-name has {methodName} wih no settings");
 							return;
 						}
 
