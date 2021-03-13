@@ -218,7 +218,14 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		private async static Task<MethodResponse> AzureIoTHubClientDefaultMethodHandler(MethodRequest methodRequest, object userContext)
 		{
-			_logger.LogWarning("AzureIoTHubClientDefaultMethodHandler name:{0} payload:{1)", methodRequest.Name, methodRequest.DataAsJson);
+			if (methodRequest.DataAsJson != null)
+			{
+				_logger.LogWarning("AzureIoTHubClientDefaultMethodHandler name:{0} payload:{1)", methodRequest.Name, methodRequest.DataAsJson);
+			}
+			else
+			{
+				_logger.LogWarning("AzureIoTHubClientDefaultMethodHandler name:{0} payload:NULL", methodRequest.Name);
+			}
 
 			return new MethodResponse(404);
 		}
@@ -442,29 +449,36 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 						queue = methodSetting.Queue;
 
-						try
-						{
-							if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
-															&&
-								(!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
-							{
-								throw new JsonReaderException();
-							}
-
-							downlink.PayloadDecoded= JToken.Parse(payloadText);
-						}
-						catch (JsonReaderException)
+						if (payloadText.CompareTo("@") != 0)
 						{
 							try
 							{
-								JToken value = JToken.Parse(payloadText);
+								if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
+															&&
+									(!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
+								{
+									throw new JsonReaderException();
+								}
 
-								downlink.PayloadDecoded = new JObject(new JProperty(methodName, value));
+								downlink.PayloadDecoded = JToken.Parse(payloadText);
 							}
 							catch (JsonReaderException)
 							{
-								downlink.PayloadDecoded = new JObject(new JProperty(methodName, payloadText));
+								try
+								{
+									JToken value = JToken.Parse(payloadText);
+
+									downlink.PayloadDecoded = new JObject(new JProperty(methodName, value));
+								}
+								catch (JsonReaderException)
+								{
+									downlink.PayloadDecoded = new JObject(new JProperty(methodName, payloadText));
+								}
 							}
+						}
+						else
+						{
+							downlink.PayloadRaw = "";
 						}
 
 						_logger.LogInformation("Downlink-IoT Central DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
