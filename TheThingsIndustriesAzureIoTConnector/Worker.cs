@@ -350,7 +350,81 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 					string payloadText = Encoding.UTF8.GetString(message.GetBytes()).Trim();
 
-					if (!message.Properties.ContainsKey("method-name"))
+					if (message.Properties.ContainsKey("method-name"))
+					{
+						// Looks like Azure IoT Central message
+						string methodName = message.Properties["method-name"];
+						if (string.IsNullOrWhiteSpace(methodName))
+						{
+							_logger.LogWarning("Downlink-DeviceID:{0} MessagedID:{1} method-name property empty", receiveMessageHandlerConext.DeviceId, message.MessageId);
+
+							await deviceClient.RejectAsync(message);
+							return;
+						}
+
+						// Look up the method settings to get confirmed, port, priority, and queue
+						if (!receiveMessageHandlerConext.MethodSettings.TryGetValue(methodName, out MethodSetting methodSetting))
+						{
+							_logger.LogWarning("Downlink-DeviceID:{0} MessagedID:{1} method-name:{2} has no settings", receiveMessageHandlerConext.DeviceId, message.MessageId, methodName);
+
+							await deviceClient.RejectAsync(message);
+							return;
+						}
+
+						downlink = new Downlink()
+						{
+							Confirmed = methodSetting.Confirmed,
+							Priority = methodSetting.Priority,
+							Port = methodSetting.Port,
+							CorrelationIds = AzureLockToken.Add(message.LockToken),
+						};
+
+						queue = methodSetting.Queue;
+
+						// Check to see if special case for Azure IoT central command with no request payload
+						if (payloadText.CompareTo("@") != 0)
+						{
+							try
+							{
+								// Split over multiple lines to improve readability
+								if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
+															&&
+									(!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
+								{
+									throw new JsonReaderException();
+								}
+
+								downlink.PayloadDecoded = JToken.Parse(payloadText);
+							}
+							catch (JsonReaderException)
+							{
+								try
+								{
+									JToken value = JToken.Parse(payloadText);
+
+									downlink.PayloadDecoded = new JObject(new JProperty(methodName, value));
+								}
+								catch (JsonReaderException)
+								{
+									downlink.PayloadDecoded = new JObject(new JProperty(methodName, payloadText));
+								}
+							}
+						}
+						else
+						{
+							downlink.PayloadRaw = "";
+						}
+
+					_logger.LogInformation("Downlink-IoT Central DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
+							receiveMessageHandlerConext.DeviceId,
+							message.MessageId,
+							message.LockToken,
+							downlink.Port,
+							downlink.Confirmed,
+							downlink.Priority,
+							queue);
+					}
+					else
 					{
 						// Looks like it's Azure IoT hub message, Put the one mandatory message property first, just because
 						if (!AzureDownlinkMessage.PortTryGet(message.Properties, out byte port))
@@ -393,8 +467,10 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 							CorrelationIds = AzureLockToken.Add(message.LockToken),
 						};
 
+						// Don't like using exceptions for flow control but can't find a better appraoch
 						try
 						{
+							// Split over multiple lines in an attempt to improve readability. A valid JSON string should start/end with {/} for an object or [/] for an array
 							if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
 																&&
 								(!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
@@ -410,78 +486,6 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						}
 
 						_logger.LogInformation("Downlink-IoT Hub DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
-							receiveMessageHandlerConext.DeviceId,
-							message.MessageId,
-							message.LockToken,
-							downlink.Port,
-							downlink.Confirmed,
-							downlink.Priority,
-							queue);
-					}
-					else
-					{
-						// Looks like Azure IoT Central
-						string methodName = message.Properties["method-name"];
-						if (string.IsNullOrWhiteSpace(methodName))
-						{
-							_logger.LogWarning("Downlink-DeviceID:{0} MessagedID:{1} method-name property empty", receiveMessageHandlerConext.DeviceId, message.MessageId);
-
-							await deviceClient.RejectAsync(message);
-							return;
-						}
-
-						// Look up the method settings
-						if ( !receiveMessageHandlerConext.MethodSettings.TryGetValue(methodName, out MethodSetting methodSetting))
-						{
-							_logger.LogWarning("Downlink-DeviceID:{0} MessagedID:{1} method-name:{2} has no settings", receiveMessageHandlerConext.DeviceId, message.MessageId, methodName);
-
-							await deviceClient.RejectAsync(message);
-							return;
-						}
-
-						downlink = new Downlink()
-						{
-							Confirmed = methodSetting.Confirmed,
-							Priority = methodSetting.Priority,
-							Port = methodSetting.Port,
-							CorrelationIds = AzureLockToken.Add(message.LockToken),
-						};
-
-						queue = methodSetting.Queue;
-
-						if (payloadText.CompareTo("@") != 0)
-						{
-							try
-							{
-								if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
-															&&
-									(!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
-								{
-									throw new JsonReaderException();
-								}
-
-								downlink.PayloadDecoded = JToken.Parse(payloadText);
-							}
-							catch (JsonReaderException)
-							{
-								try
-								{
-									JToken value = JToken.Parse(payloadText);
-
-									downlink.PayloadDecoded = new JObject(new JProperty(methodName, value));
-								}
-								catch (JsonReaderException)
-								{
-									downlink.PayloadDecoded = new JObject(new JProperty(methodName, payloadText));
-								}
-							}
-						}
-						else
-						{
-							downlink.PayloadRaw = "";
-						}
-
-						_logger.LogInformation("Downlink-IoT Central DeviceID:{0} MessageID:{2} LockToken:{3} Port:{4} Confirmed:{5} Priority:{6} Queue:{7}",
 							receiveMessageHandlerConext.DeviceId,
 							message.MessageId,
 							message.LockToken,
