@@ -156,10 +156,13 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 									{
 										_logger.LogInformation("Config-ApplicationID:{0} DeviceID:{1} Device EUI:{2}", device.Ids.Application_ids.Application_id, device.Ids.Device_id, BitConverter.ToString(device.Ids.Dev_eui));
 
-										if (!await DeviceRegistration(device.Ids.Application_ids.Application_id, device.Ids.Device_id, stoppingToken))
+										if (!await DeviceRegistration(device.Ids.Application_ids.Application_id, 
+																			device.Ids.Device_id, 
+																		   _programSettings.ResolveDeviceModelId(device.Ids.Application_ids.Application_id, device.Attributes), 
+																			stoppingToken))
 										{
 											// TODO : work out if device registration failure aborts startup
-											_logger.LogWarning("Config-Application:{0}", device.Ids.Application_ids.Application_id);
+											_logger.LogWarning("Config-Application:{0} Device:{1} DeviceRegistration failed", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
 										}
 									}
 								}
@@ -230,7 +233,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			return new MethodResponse(404);
 		}
 
-		private static async Task<bool> DeviceRegistration(string applicationId, string deviceId, CancellationToken stoppingToken)
+		private static async Task<bool> DeviceRegistration(string applicationId, string deviceId, string modelId, CancellationToken stoppingToken)
 		{
 			DeviceClient deviceClient = null;
 			ITransportSettings[] transportSettings = new ITransportSettings[]
@@ -239,7 +242,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 				{
 					AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
 					{
-						Pooling = true,
+						Pooling = true,						 
 					}
  				}
 			};
@@ -249,7 +252,18 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 				// See if AzureIoT hub connections string has been configured
 				if (_programSettings.ConnectionStringResolve(applicationId, out string connectionString))
 				{
-					deviceClient = DeviceClient.CreateFromConnectionString(connectionString, deviceId, transportSettings);
+					if (!string.IsNullOrEmpty(modelId))
+                    {
+						ClientOptions clientoptions = new ClientOptions()
+						{
+							ModelId = modelId
+						};
+						deviceClient = DeviceClient.CreateFromConnectionString(connectionString, deviceId, transportSettings, clientoptions);
+					}
+					else
+					{
+						deviceClient = DeviceClient.CreateFromConnectionString(connectionString, deviceId, transportSettings);
+					}
 				}
 
 				// See if DPS has been configured
@@ -266,13 +280,28 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 					{
 						using (var transport = new ProvisioningTransportHandlerAmqp(TransportFallbackType.TcpOnly))
 						{
-							ProvisioningDeviceClient provClient = ProvisioningDeviceClient.Create(
+							ProvisioningDeviceClient provClient = ProvisioningDeviceClient.Create( 
 								Constants.AzureDpsGlobalDeviceEndpoint,
 								deviceProvisiongServiceSettings.IdScope,
 								securityProvider,
 								transport);
 
-							DeviceRegistrationResult result = await provClient.RegisterAsync(stoppingToken);
+							DeviceRegistrationResult result;
+
+							if (!string.IsNullOrEmpty(modelId))
+							{
+								ProvisioningRegistrationAdditionalData provisioningRegistrationAdditionalData = new ProvisioningRegistrationAdditionalData()
+								{
+									JsonData = $"{{\"modelId\": \"{modelId}\"}}"
+								};
+
+								result = await provClient.RegisterAsync(provisioningRegistrationAdditionalData, stoppingToken);
+							}
+							else
+                            {
+								result = await provClient.RegisterAsync(stoppingToken);
+							}
+
 							if (result.Status != ProvisioningRegistrationStatusType.Assigned)
 							{
 								_logger.LogError("Config-DeviceID:{0} Status:{1} RegisterAsyc failed ", deviceId, result.Status);
@@ -286,6 +315,13 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 						}
 					}
 				}
+
+				if ( deviceClient == null)
+                {
+					_logger.LogError("Config-DeviceID:{0} DeviceClient.Create failed ", deviceId);
+
+					return false;
+                }
 
 				await deviceClient.OpenAsync(stoppingToken);
 

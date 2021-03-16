@@ -27,6 +27,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
       public static readonly string DeviceAzureIntegrationProperty = "azureintegration";
 
+      public static readonly string DeviceDtdlModelIdProperty = "dtdlmodelid"; // this has to be lower case as TTI only supports lower case attribute names
+
       public static readonly string AzureDpsGlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
    }
 }

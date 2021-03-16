@@ -56,6 +56,8 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
 		public bool? DeviceIntegrationDefault { get; set; }
 
+		public string DtdlModelId { get; set; }
+
 		public Dictionary<string, MethodSetting> MethodSettings { get; set; }
 	}
 
@@ -138,6 +140,31 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 			}
 
 			return false;
+		}
+
+		public string ResolveDeviceModelId(string applicationId, IDictionary<string, string> deviceAttributes)
+		{
+			// CHeck to see if the devices has attributes
+			if (deviceAttributes != null)
+			{
+				// Using application Device Model Id attribute value
+				if (deviceAttributes.ContainsKey(Constants.DeviceDtdlModelIdProperty))
+				{
+					return deviceAttributes[Constants.DeviceDtdlModelIdProperty];
+				}
+			}
+
+			// Check application configuration exists
+			if (this.Applications.ContainsKey(applicationId))
+			{
+				if (this.Applications[applicationId].DtdlModelId != null)
+				{
+					// Using application default from appsettings.json
+					return this.Applications[applicationId].DtdlModelId;
+				}
+			}
+
+			return string.Empty;
 		}
 
 		public string ApplicationIdResolve(string applicationId)
