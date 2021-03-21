@@ -27,9 +27,9 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
    using System;
    using System.Collections.Concurrent;
    using System.Collections.Generic;
-   using System.Security.Cryptography;
    using System.Globalization;
    using System.Net.Http;
+   using System.Security.Cryptography;
    using System.Text;
    using System.Threading;
    using System.Threading.Tasks;
@@ -57,7 +57,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
    public class Worker : BackgroundService
    {
-      private static ILogger<Worker> _logger;
+      private static  ILogger<Worker> _logger;
       private static ProgramSettings _programSettings;
       private static readonly ConcurrentDictionary<string, DeviceClient> _DeviceClients = new ConcurrentDictionary<string, DeviceClient>();
       private static readonly ConcurrentDictionary<string, IManagedMqttClient> _MqttClients = new ConcurrentDictionary<string, IManagedMqttClient>();
@@ -150,22 +150,29 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
                      while ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
                      {
+                        List<Task<bool>> tasks = new List<Task<bool>>();
+
+                        _logger.LogInformation("Config-ApplicationID:{0} start", applicationSetting.Key);
+
                         foreach (V3EndDevice device in endDevices.End_devices)
                         {
                            if (DeviceAzureEnabled(device))
                            {
                               _logger.LogInformation("Config-ApplicationID:{0} DeviceID:{1} Device EUI:{2}", device.Ids.Application_ids.Application_id, device.Ids.Device_id, BitConverter.ToString(device.Ids.Dev_eui));
 
-                              if (!await DeviceRegistration(device.Ids.Application_ids.Application_id,
+                              tasks.Add(DeviceRegistration(device.Ids.Application_ids.Application_id,
                                                          device.Ids.Device_id,
                                                          _programSettings.ResolveDeviceModelId(device.Ids.Application_ids.Application_id, device.Attributes),
-                                                         stoppingToken))
-                              {
-                                 // TODO : work out if device registration failure aborts startup
-                                 _logger.LogWarning("Config-Application:{0} Device:{1} DeviceRegistration failed", device.Ids.Application_ids.Application_id, device.Ids.Device_id);
-                              }
+                                                         stoppingToken));
                            }
                         }
+
+                        _logger.LogInformation("Config-ApplicationID:{0} Page:{1} processing start", applicationSetting.Key, devicePage);
+
+                        Task.WaitAll(tasks.ToArray(),stoppingToken);
+
+                        _logger.LogInformation("Config-ApplicationID:{0} Page:{1} processing finish", applicationSetting.Key, devicePage);
+
                         endDevices = await endDeviceRegistryClient.ListAsync(
                            applicationSetting.Key,
                            field_mask_paths: Constants.DevicefieldMaskPaths,
@@ -173,6 +180,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                            limit: _programSettings.TheThingsIndustries.DevicePageSize,
                            cancellationToken: stoppingToken);
                      }
+                     _logger.LogInformation("Config-ApplicationID:{0} finish", applicationSetting.Key);
                   }
                   catch (ApiException ex)
                   {
@@ -238,7 +246,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
          DeviceClient deviceClient = null;
          ITransportSettings[] transportSettings = new ITransportSettings[]
          {
-            new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
+         new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
             {
                AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
                {
