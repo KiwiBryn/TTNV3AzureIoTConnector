@@ -37,6 +37,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
    using Microsoft.Azure.Devices.Client;
    using Microsoft.Azure.Devices.Client.Exceptions;
    using Microsoft.Azure.Devices.Provisioning.Client;
+   using Microsoft.Azure.Devices.Provisioning.Client.PlugAndPlay;
    using Microsoft.Azure.Devices.Provisioning.Client.Transport;
    using Microsoft.Azure.Devices.Shared;
    using Microsoft.Extensions.Hosting;
@@ -300,7 +301,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                      {
                         ProvisioningRegistrationAdditionalData provisioningRegistrationAdditionalData = new ProvisioningRegistrationAdditionalData()
                         {
-                           JsonData = $"{{\"modelId\": \"{modelId}\"}}"
+                            JsonData = PnpConvention.CreateDpsPayload(modelId)
                         };
 
                         result = await provClient.RegisterAsync(provisioningRegistrationAdditionalData, stoppingToken);
