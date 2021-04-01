@@ -247,14 +247,14 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
          DeviceClient deviceClient = null;
          ITransportSettings[] transportSettings = new ITransportSettings[]
          {
-         new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
+            new AmqpTransportSettings(TransportType.Amqp_Tcp_Only)
             {
                AmqpConnectionPoolSettings = new AmqpConnectionPoolSettings()
                {
                   Pooling = true,
                }
              }
-         };
+          };
 
          try
          {
@@ -512,20 +512,21 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                      CorrelationIds = AzureLockToken.Add(message.LockToken),
                   };
 
-                  // Don't like using exceptions for flow control but can't find a better appraoch
-                  try
+                  // Split over multiple lines in an attempt to improve readability. In this scenario a valid JSON string should start/end with {/} for an object or [/] for an array
+                  if ((payloadText.StartsWith("{") && payloadText.EndsWith("}"))
+                                                ||
+                     ((payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
                   {
-                     // Split over multiple lines in an attempt to improve readability. A valid JSON string should start/end with {/} for an object or [/] for an array
-                     if (!(payloadText.StartsWith("{") && payloadText.EndsWith("}"))
-                                                &&
-                        (!(payloadText.StartsWith("[") && payloadText.EndsWith("]"))))
+                     try
                      {
-                        throw new JsonReaderException();
+                        downlink.PayloadDecoded = JToken.Parse(payloadText);
                      }
-
-                     downlink.PayloadDecoded = JToken.Parse(payloadText);
+                     catch (JsonReaderException)
+                     {
+                        downlink.PayloadRaw = payloadText;
+                     }
                   }
-                  catch (JsonReaderException)
+                  else
                   {
                      downlink.PayloadRaw = payloadText;
                   }
