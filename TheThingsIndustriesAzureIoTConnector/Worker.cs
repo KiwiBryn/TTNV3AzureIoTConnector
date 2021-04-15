@@ -159,7 +159,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                         {
                            if (DeviceAzureEnabled(device))
                            {
-                              _logger.LogInformation("Config-ApplicationID:{0} DeviceID:{1} Device EUI:{2}", device.Ids.Application_ids.Application_id, device.Ids.Device_id, BitConverter.ToString(device.Ids.Dev_eui));
+                              _logger.LogInformation("Config-ApplicationID:{0} DeviceID:{1} Device EUI:{2}", device.Ids.Application_ids.Application_id, device.Ids.Device_id, device.Ids.Dev_eui);
 
                               tasks.Add(DeviceRegistration(device.Ids.Application_ids.Application_id,
                                                          device.Ids.Device_id,

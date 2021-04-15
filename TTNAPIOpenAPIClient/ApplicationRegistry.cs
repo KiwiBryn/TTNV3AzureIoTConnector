@@ -19470,10 +19470,10 @@ namespace devMobile.TheThingsNetwork.API
     
         /// <summary>The LoRaWAN DevEUI.</summary>
         [Newtonsoft.Json.JsonProperty("dev_eui", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public byte[] Dev_eui { get; set; }
-    
-        /// <summary>The LoRaWAN JoinEUI (AppEUI until LoRaWAN 1.0.3 end devices).</summary>
-        [Newtonsoft.Json.JsonProperty("join_eui", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string Dev_eui { get; set; }
+
+      /// <summary>The LoRaWAN JoinEUI (AppEUI until LoRaWAN 1.0.3 end devices).</summary>
+      [Newtonsoft.Json.JsonProperty("join_eui", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public byte[] Join_eui { get; set; }
     
         /// <summary>The LoRaWAN DevAddr.</summary>
