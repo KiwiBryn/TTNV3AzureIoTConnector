@@ -58,7 +58,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
    public class Worker : BackgroundService
    {
-      private static  ILogger<Worker> _logger;
+      private static ILogger<Worker> _logger;
       private static ProgramSettings _programSettings;
       private static readonly ConcurrentDictionary<string, DeviceClient> _DeviceClients = new ConcurrentDictionary<string, DeviceClient>();
       private static readonly ConcurrentDictionary<string, IManagedMqttClient> _MqttClients = new ConcurrentDictionary<string, IManagedMqttClient>();
@@ -170,7 +170,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
                         _logger.LogInformation("Config-ApplicationID:{0} Page:{1} processing start", applicationSetting.Key, devicePage);
 
-                        Task.WaitAll(tasks.ToArray(),stoppingToken);
+                        Task.WaitAll(tasks.ToArray(), stoppingToken);
 
                         _logger.LogInformation("Config-ApplicationID:{0} Page:{1} processing finish", applicationSetting.Key, devicePage);
 
@@ -301,7 +301,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                      {
                         ProvisioningRegistrationAdditionalData provisioningRegistrationAdditionalData = new ProvisioningRegistrationAdditionalData()
                         {
-                            JsonData = PnpConvention.CreateDpsPayload(modelId)
+                           JsonData = PnpConvention.CreateDpsPayload(modelId)
                         };
 
                         result = await provClient.RegisterAsync(provisioningRegistrationAdditionalData, stoppingToken);
@@ -325,7 +325,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                }
             }
 
-            if ( deviceClient == null)
+            if (deviceClient == null)
             {
                _logger.LogError("Config-DeviceID:{0} DeviceClient.Create failed ", deviceId);
 
@@ -568,38 +568,29 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
       private async void MqttClientApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs e)
       {
-         if (e.ApplicationMessage.Topic.EndsWith("/up", StringComparison.InvariantCultureIgnoreCase))
-         {
-            await UplinkMessageReceived(e);
-            return;
-         }
+         string topic = e.ApplicationMessage.Topic.Substring(e.ApplicationMessage.Topic.LastIndexOf("/") + 1);
 
-         // Something other than an uplink message
-         if (e.ApplicationMessage.Topic.EndsWith("/queued", StringComparison.InvariantCultureIgnoreCase))
+         switch (topic)
          {
-            await DownlinkMessageQueued(e);
-            return;
+            case "up":
+               await UplinkMessageReceived(e);
+               break;
+            case "queued":
+               await DownlinkMessageQueued(e);
+               break;
+            case "ack":
+               await DownlinkMessageAck(e);
+               break;
+            case "nack":
+               await DownlinkMessageNack(e);
+               break;
+            case "failed":
+               await DownlinkMessageFailed(e);
+               break;
+            default:
+               _logger.LogWarning("MessageReceived unknown Topic:{0} Payload:{1}", e.ApplicationMessage.Topic, e.ApplicationMessage.ConvertPayloadToString());
+               break;
          }
-
-         if (e.ApplicationMessage.Topic.EndsWith("/ack", StringComparison.InvariantCultureIgnoreCase))
-         {
-            await DownlinkMessageAck(e);
-            return;
-         }
-
-         if (e.ApplicationMessage.Topic.EndsWith("/nack", StringComparison.InvariantCultureIgnoreCase))
-         {
-            await DownlinkMessageNack(e);
-            return;
-         }
-
-         if (e.ApplicationMessage.Topic.EndsWith("/failed", StringComparison.InvariantCultureIgnoreCase))
-         {
-            await DownlinkMessageFailed(e);
-            return;
-         }
-
-         _logger.LogWarning("MessageReceived unknown Topic:{0} Payload:{1}", e.ApplicationMessage.Topic, e.ApplicationMessage.ConvertPayloadToString());
       }
 
       private async Task UplinkMessageReceived(MqttApplicationMessageReceivedEventArgs e)
