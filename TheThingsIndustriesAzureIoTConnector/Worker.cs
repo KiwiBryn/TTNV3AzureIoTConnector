@@ -206,25 +206,32 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
             _logger.LogInformation("devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector stopping");
          }
 
-         try
+         foreach (var deviceClient in _DeviceClients)
          {
-            foreach (var deviceClient in _DeviceClients)
+            try
             {
                _logger.LogInformation("Close-DeviceID:{0}", deviceClient.Key);
+
                await deviceClient.Value.CloseAsync(CancellationToken.None);
             }
-
-            foreach (var mqttClient in _MqttClients)
+            catch (Exception ex)
             {
-               _logger.LogInformation("Close-ApplicationID:{0}", mqttClient.Key);
-               await mqttClient.Value.StopAsync();
+               _logger.LogError(ex, "devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector Device Client {0} shutdown error", deviceClient.Key);
             }
          }
-         catch (Exception ex)
-         {
-            _logger.LogError(ex, "devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector shutdown error");
 
-            return;
+         foreach (var mqttClient in _MqttClients)
+         {
+            try
+            {
+               _logger.LogInformation("Close-ApplicationID:{0}", mqttClient.Key);
+
+               await mqttClient.Value.StopAsync();
+            }
+            catch (Exception ex)
+            {
+               _logger.LogError(ex, "devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector MQTT Client {0} shutdown error", mqttClient.Key);
+            }
          }
       }
 
