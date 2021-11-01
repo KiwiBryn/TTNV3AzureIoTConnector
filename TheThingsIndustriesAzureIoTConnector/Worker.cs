@@ -151,7 +151,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
 
                      while ((endDevices != null) && (endDevices.End_devices != null)) // If no devices returns null rather than empty list
                      {
-                        List<Task<bool>> tasks = new List<Task<bool>>();
+                        List<Task> tasks = new List<Task>();
 
                         _logger.LogInformation("Config-ApplicationID:{0} start", applicationSetting.Key);
 
@@ -249,7 +249,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
          return new MethodResponse(404);
       }
 
-      private static async Task<bool> DeviceRegistration(string applicationId, string deviceId, string modelId, CancellationToken stoppingToken)
+      private static async Task DeviceRegistration(string applicationId, string deviceId, string modelId, CancellationToken stoppingToken)
       {
          DeviceClient deviceClient = null;
          ITransportSettings[] transportSettings = new ITransportSettings[]
@@ -322,7 +322,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                      {
                         _logger.LogError("Config-DeviceID:{0} Status:{1} RegisterAsync failed ", deviceId, result.Status);
 
-                        return false;
+                        return; 
                      }
 
                      IAuthenticationMethod authentication = new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, (securityProvider as SecurityProviderSymmetricKey).GetPrimaryKey());
@@ -336,7 +336,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
             {
                _logger.LogError("Config-DeviceID:{0} DeviceClient.Create failed ", deviceId);
 
-               return false;
+               return;
             }
 
             await deviceClient.OpenAsync(stoppingToken);
@@ -346,7 +346,7 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
                // Need to decide whether device cache add failure aborts startup
                _logger.LogError("Config-Device:{0} cache add failed", deviceId);
 
-               return false;
+               return;
             }
 
             AzureIoTHubReceiveMessageHandlerContext context = new AzureIoTHubReceiveMessageHandlerContext()
@@ -365,16 +365,16 @@ namespace devMobile.TheThingsIndustries.TheThingsIndustriesAzureIoTConnector
          {
             _logger.LogWarning("Config-Azure Device:{0} device not found connection failed", deviceId);
 
-            return false;
+            return ;
          }
          catch (Exception ex)
          {
             _logger.LogError(ex, "Config-Azure Device:{0} connection failed", deviceId);
 
-            return false;
+            return ;
          }
 
-         return true;
+         return ;
       }
 
       private async static Task AzureIoTHubClientReceiveMessageHandler(Message message, object userContext)
