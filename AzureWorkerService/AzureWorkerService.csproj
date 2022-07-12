@@ -4,9 +4,9 @@
     <UserSecretsId>dotnet-WorkerService-1AB0ABED-C6A3-4A70-86D4-B6F410375FA9</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.16.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.ApplicationInsights" Version="2.16.0" />
+    <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.20.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.ApplicationInsights" Version="2.20.0" />
     <PackageReference Include="System.Collections" Version="4.3.0" />
   </ItemGroup>
   <ItemGroup>
